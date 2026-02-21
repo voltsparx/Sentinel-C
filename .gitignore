@@ -13,31 +13,6 @@
 # Generated runtime data
 /sentinel-c-logs/
 
-# Local release outputs:
-# Ignore generated payloads, but keep folder skeleton with .gitkeep placeholders.
-/bin-releases/**
-!/bin-releases/
-!/bin-releases/linux/
-!/bin-releases/linux/releases/
-!/bin-releases/windows/
-!/bin-releases/windows/releases/
-!/bin-releases/macos/
-!/bin-releases/macos/releases/
-!/bin-releases/macos/releases/bin/
-!/bin-releases/macos/releases/docs/
-!/bin-releases/macos/releases/docs/images/
-!/bin-releases/**/.gitkeep
-!/bin-releases/macos/NOTE.txt
-
-# Archive/binary payloads under release tree
-/bin-releases/**/*.zip
-/bin-releases/**/*.tar
-/bin-releases/**/*.tar.gz
-/bin-releases/**/*.tgz
-/bin-releases/**/*.7z
-/bin-releases/**/*.exe
-/bin-releases/**/sentinel-c
-
 # IDE and OS files
 /.vscode/
 /.idea/
