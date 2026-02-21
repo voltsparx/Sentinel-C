@@ -178,10 +178,30 @@ void generate_reports_async(const scanner::ScanResult& result,
 
 ExitCode load_baseline(BaselineView& baseline, bool quiet) {
     if (!scanner::load_baseline(baseline.files, &baseline.root)) {
+        const std::string detail = scanner::baseline_last_error();
+        const bool baseline_missing =
+            detail.find("Baseline file not found") != std::string::npos;
+        const bool baseline_guard_failure =
+            detail.find("seal") != std::string::npos ||
+            detail.find("tamper") != std::string::npos;
         if (!quiet) {
-            logger::error("Baseline not found. Run --init <path> first.");
+            if (!detail.empty()) {
+                logger::error(detail);
+            } else {
+                logger::error("Baseline not found. Run --init <path> first.");
+            }
+            if (baseline_guard_failure) {
+                logger::error("Run --init --force or --update after confirming trusted state.");
+            }
         }
-        return ExitCode::BaselineMissing;
+        if (baseline_guard_failure) {
+            return ExitCode::OperationFailed;
+        }
+        return baseline_missing ? ExitCode::BaselineMissing : ExitCode::OperationFailed;
+    }
+    const std::string warning = scanner::baseline_last_warning();
+    if (!quiet && !warning.empty()) {
+        logger::warning(warning);
     }
     return ExitCode::Ok;
 }
@@ -241,7 +261,8 @@ ExitCode handle_init(const ParsedArgs& parsed) {
     core::ScanStats stats;
     const scanner::FileMap snapshot = scanner::build_snapshot(target, &stats);
     if (!scanner::save_baseline(snapshot, target)) {
-        logger::error("Failed to save baseline: " + config::BASELINE_DB);
+        const std::string detail = scanner::baseline_last_error();
+        logger::error(detail.empty() ? ("Failed to save baseline: " + config::BASELINE_DB) : detail);
         return ExitCode::OperationFailed;
     }
 
@@ -338,7 +359,8 @@ ExitCode handle_scan_mode(const ParsedArgs& parsed, ScanMode mode) {
 
     if (mode == ScanMode::Update) {
         if (!scanner::save_baseline(outcome.result.current, target)) {
-            logger::error("Scan completed, but baseline update failed.");
+            const std::string detail = scanner::baseline_last_error();
+            logger::error(detail.empty() ? "Scan completed, but baseline update failed." : detail);
             return ExitCode::OperationFailed;
         }
         if (!as_json) {

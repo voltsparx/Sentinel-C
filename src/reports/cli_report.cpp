@@ -105,7 +105,8 @@ void write_ascii_table(std::ofstream& out, const std::vector<ChangeRow>& rows) {
 
 std::string write_cli(const scanner::ScanResult& result, const std::string& scan_id) {
     const std::string id = scan_id.empty() ? fsutil::timestamp() : scan_id;
-    const std::string file = config::REPORT_CLI_DIR + "/scan_" + id + ".txt";
+    const std::string file =
+        config::REPORT_CLI_DIR + "/sentinel-c_integrity_cli_report_" + id + ".txt";
 
     std::ofstream out(file, std::ios::trunc);
     if (!out.is_open()) {
@@ -146,37 +147,22 @@ std::string write_cli(const scanner::ScanResult& result, const std::string& scan
         write_ascii_table(out, rows);
     }
 
-    out << "\nNano Advisor\n";
-    out << "------------\n";
-    out << " Summary:\n";
+    out << "\nGuidance\n";
+    out << "--------\n";
     out << "  > " << narrative.summary << "\n";
 
-    if (!narrative.whys.empty()) {
-        out << " Why this matters:\n";
-        for (const std::string& line : narrative.whys) {
-            out << "  - " << line << "\n";
-        }
-    }
+    std::vector<std::string> guidance;
+    guidance.reserve(narrative.whys.size() +
+                     narrative.what_matters.size() +
+                     narrative.teaching.size() +
+                     narrative.next_steps.size());
+    guidance.insert(guidance.end(), narrative.whys.begin(), narrative.whys.end());
+    guidance.insert(guidance.end(), narrative.what_matters.begin(), narrative.what_matters.end());
+    guidance.insert(guidance.end(), narrative.teaching.begin(), narrative.teaching.end());
+    guidance.insert(guidance.end(), narrative.next_steps.begin(), narrative.next_steps.end());
 
-    if (!narrative.what_matters.empty()) {
-        out << " What matters now:\n";
-        for (const std::string& line : narrative.what_matters) {
-            out << "  - " << line << "\n";
-        }
-    }
-
-    if (!narrative.teaching.empty()) {
-        out << " Teaching notes:\n";
-        for (const std::string& line : narrative.teaching) {
-            out << "  - " << line << "\n";
-        }
-    }
-
-    if (!narrative.next_steps.empty()) {
-        out << " Suggested next steps:\n";
-        for (const std::string& line : narrative.next_steps) {
-            out << "  - " << line << "\n";
-        }
+    for (const std::string& line : guidance) {
+        out << "  - " << line << "\n";
     }
 
     return file;

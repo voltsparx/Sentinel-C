@@ -132,16 +132,65 @@ if [[ ! -x "${BINARY_PATH}" ]]; then
   exit 2
 fi
 
-RELEASE_DIR="${PROJECT_ROOT}/bin-releases/linux"
+RELEASE_DIR="${PROJECT_ROOT}/bin-releases/linux/releases"
+RELEASE_BIN_DIR="${RELEASE_DIR}/bin"
+RELEASE_DOCS_DIR="${RELEASE_DIR}/docs"
+
 if [[ -e "${RELEASE_DIR}" && ! -d "${RELEASE_DIR}" ]]; then
   echo "[ERROR] Release path exists but is not a directory: ${RELEASE_DIR}" >&2
   exit 1
 fi
-mkdir -p "${RELEASE_DIR}"
-RELEASE_BINARY="${RELEASE_DIR}/sentinel-c-${BUILD_TYPE}"
+
+mkdir -p "${RELEASE_BIN_DIR}"
+mkdir -p "${RELEASE_DOCS_DIR}"
+
+RELEASE_BINARY="${RELEASE_BIN_DIR}/sentinel-c"
 cp "${BINARY_PATH}" "${RELEASE_BINARY}"
 chmod +x "${RELEASE_BINARY}"
+
+if [[ -f "${PROJECT_ROOT}/LICENSE" ]]; then
+  cp "${PROJECT_ROOT}/LICENSE" "${RELEASE_DIR}/LICENSE"
+fi
+
+if [[ -f "${PROJECT_ROOT}/docs/Usage.txt" ]]; then
+  cp "${PROJECT_ROOT}/docs/Usage.txt" "${RELEASE_DIR}/Usage.txt"
+fi
+
+if [[ -d "${PROJECT_ROOT}/docs" ]]; then
+  rm -rf "${RELEASE_DOCS_DIR}"
+  mkdir -p "${RELEASE_DOCS_DIR}"
+  cp -r "${PROJECT_ROOT}/docs/." "${RELEASE_DOCS_DIR}/"
+fi
+
+cat > "${RELEASE_DIR}/README.md" <<'EOF'
+# Sentinel-C v4.0 (Linux x86_64)
+
+Author: voltsparx
+Contact: voltsparx@gmail.com
+
+Contents:
+- bin/sentinel-c
+- docs/
+- Usage.txt
+- LICENSE
+- SHA256SUMS.txt
+
+Quick Run:
+chmod +x bin/sentinel-c
+./bin/sentinel-c --help
+./bin/sentinel-c --prompt-mode
+EOF
+
+if command -v sha256sum >/dev/null 2>&1; then
+  (
+    cd "${RELEASE_DIR}"
+    find . -type f ! -name SHA256SUMS.txt -print0 \
+      | sort -z \
+      | xargs -0 sha256sum > SHA256SUMS.txt
+  )
+fi
 
 echo "[SUCCESS] Build completed."
 echo "[SUCCESS] Binary: ${BINARY_PATH}"
 echo "[SUCCESS] Release copy: ${RELEASE_BINARY}"
+echo "[SUCCESS] Release root: ${RELEASE_DIR}"

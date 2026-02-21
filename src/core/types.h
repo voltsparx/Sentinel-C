@@ -28,6 +28,7 @@ struct OutputPaths {
     std::string csv_report;
     std::string log_file;
     std::string baseline;
+    std::string baseline_seal;
 };
 
 } // namespace core

@@ -78,7 +78,8 @@ namespace reports {
 
 std::string write_json(const scanner::ScanResult& result, const std::string& scan_id) {
     const std::string id = scan_id.empty() ? fsutil::timestamp() : scan_id;
-    const std::string file = config::REPORT_JSON_DIR + "/scan_" + id + ".json";
+    const std::string file =
+        config::REPORT_JSON_DIR + "/sentinel-c_integrity_json_report_" + id + ".json";
 
     std::ofstream out(file, std::ios::trunc);
     if (!out.is_open()) {

@@ -68,6 +68,7 @@ core::OutputPaths default_outputs() {
     outputs.csv_report = "N/A";
     outputs.log_file = config::LOG_FILE;
     outputs.baseline = config::BASELINE_DB;
+    outputs.baseline_seal = config::BASELINE_SEAL_FILE;
     return outputs;
 }
 
@@ -98,32 +99,40 @@ void print_scan_json(const std::string& command, const ScanOutcome& outcome, Exi
 void print_usage_lines() {
     std::cout
         << "Usage:\n"
-        << "  sentinel-c --init <path> [--force] [--quiet] [--no-advice] [--json]\n"
-        << "  sentinel-c --scan <path> [--report-formats list] [--strict] [--hash-only] [--quiet] [--no-advice] [--no-reports] [--json]\n"
-        << "  sentinel-c --update <path> [--report-formats list] [--strict] [--hash-only] [--quiet] [--no-advice] [--no-reports] [--json]\n"
-        << "  sentinel-c --status <path> [--hash-only] [--quiet] [--no-advice] [--json]\n"
-        << "  sentinel-c --verify <path> [--reports] [--report-formats list] [--strict] [--hash-only] [--quiet] [--no-advice] [--json]\n"
-        << "  sentinel-c --watch <path> [--interval N] [--cycles N] [--reports] [--report-formats list] [--fail-fast] [--hash-only] [--quiet] [--no-advice] [--json]\n"
-        << "  sentinel-c --doctor [--fix] [--quiet] [--no-advice] [--json]\n"
-        << "  sentinel-c --list-baseline [--limit N] [--json]\n"
-        << "  sentinel-c --show-baseline <path> [--json]\n"
-        << "  sentinel-c --export-baseline <file> [--overwrite]\n"
-        << "  sentinel-c --import-baseline <file> [--force]\n"
-        << "  sentinel-c --purge-reports [--days N | --all] [--dry-run]\n"
-        << "  sentinel-c --tail-log [--lines N]\n"
-        << "  sentinel-c --report-index [--type all|cli|html|json|csv] [--limit N] [--json]\n"
-        << "  sentinel-c --prompt-mode [--target <path>] [--interval N] [--cycles N] [--reports] [--report-formats list] [--strict] [--hash-only] [--quiet] [--no-advice]\n"
+        << "  sentinel-c --init <path> [--force] [--quiet] [--no-advice] [--json] [--output-root <path>]\n"
+        << "  sentinel-c --scan <path> [--report-formats list] [--strict] [--hash-only] [--quiet] [--no-advice] [--no-reports] [--json] [--output-root <path>]\n"
+        << "  sentinel-c --update <path> [--report-formats list] [--strict] [--hash-only] [--quiet] [--no-advice] [--no-reports] [--json] [--output-root <path>]\n"
+        << "  sentinel-c --status <path> [--hash-only] [--quiet] [--no-advice] [--json] [--output-root <path>]\n"
+        << "  sentinel-c --verify <path> [--reports] [--report-formats list] [--strict] [--hash-only] [--quiet] [--no-advice] [--json] [--output-root <path>]\n"
+        << "  sentinel-c --watch <path> [--interval N] [--cycles N] [--reports] [--report-formats list] [--fail-fast] [--hash-only] [--quiet] [--no-advice] [--json] [--output-root <path>]\n"
+        << "  sentinel-c --doctor [--fix] [--quiet] [--no-advice] [--json] [--output-root <path>]\n"
+        << "  sentinel-c --guard [--fix] [--quiet] [--no-advice] [--json] [--output-root <path>]\n"
+        << "  sentinel-c --list-baseline [--limit N] [--json] [--output-root <path>]\n"
+        << "  sentinel-c --show-baseline <path> [--json] [--output-root <path>]\n"
+        << "  sentinel-c --export-baseline <file> [--overwrite] [--output-root <path>]\n"
+        << "  sentinel-c --import-baseline <file> [--force] [--output-root <path>]\n"
+        << "  sentinel-c --purge-reports [--days N | --all] [--dry-run] [--output-root <path>]\n"
+        << "  sentinel-c --tail-log [--lines N] [--output-root <path>]\n"
+        << "  sentinel-c --report-index [--type all|cli|html|json|csv] [--limit N] [--json] [--output-root <path>]\n"
+        << "  sentinel-c --prompt-mode [--target <path>] [--interval N] [--cycles N] [--reports] [--report-formats list] [--strict] [--hash-only] [--quiet] [--no-advice] [--output-root <path>]\n"
         << "  sentinel-c --version [--json]\n"
         << "  sentinel-c --about\n"
         << "  sentinel-c --explain\n"
-        << "  sentinel-c --help\n\n";
+        << "  sentinel-c --help\n\n"
+        << "Storage Default:\n"
+        << "  Logs and reports are stored under the binary directory by default.\n\n";
+}
+
+void print_no_command_hint() {
+    std::cout
+        << "No command was provided.\n"
+        << "Try: sentinel-c --help | sentinel-c --about | sentinel-c --prompt-mode\n"
+        << "Common: sentinel-c --init <path> | sentinel-c --scan <path> | sentinel-c --status <path>\n";
 }
 
 void print_help() {
     show_banner();
-    std::cout << "By: " << colorize(metadata::AUTHOR, ANSI_ORANGE) << "\n"
-              << "Contact: " << colorize(metadata::CONTACT, ANSI_GREY) << "\n"
-              << colorize("Trust model: local-first; no automatic data upload.", ANSI_CYAN) << "\n"
+    std::cout << colorize("Trust model: local-first; no automatic data upload.", ANSI_CYAN) << "\n"
               << colorize("Use only on systems you own or are authorized to monitor.", ANSI_GREY)
               << "\n\n";
 
@@ -157,8 +166,6 @@ void print_version(bool as_json) {
 void print_about() {
     show_banner();
     std::cout
-        << "By: " << colorize(metadata::AUTHOR, ANSI_ORANGE) << "\n"
-        << "Contact: " << colorize(metadata::CONTACT, ANSI_GREY) << "\n\n"
         << "Sentinel-C is a host-based integrity defense framework focused on\n"
         << "clear evidence, predictable behavior, and local-first operation.\n\n"
         << "What it is designed for:\n"
@@ -170,6 +177,9 @@ void print_about() {
         << "  - banner : clear screen and print Sentinel-C banner\n"
         << "  - clear  : clear console screen\n"
         << "  - exit   : leave prompt mode (Ctrl+C also exits)\n\n"
+        << "Output destination:\n"
+        << "  - Default: binary directory/sentinel-c-logs\n"
+        << "  - Override per command with --output-root <path>\n\n"
         << "Trust posture:\n"
         << "  - Runs locally and does not auto-upload data\n"
         << "  - Uses explicit commands for state-changing operations\n"
@@ -179,8 +189,8 @@ void print_about() {
 
 void print_explain() {
     std::cout
-        << "Major Flags (10) with sub-flags and examples\n"
-        << "--------------------------------------------\n\n"
+        << "Major Commands (10) with sub-flags and examples\n"
+        << "-----------------------------------------------\n\n"
         << "1. --init <path>\n"
         << "   Purpose: create a trusted baseline snapshot.\n"
         << "   Sub-flags: --force, --quiet, --no-advice, --json\n"
@@ -209,6 +219,7 @@ void print_explain() {
         << "   Purpose: check operational health of directories, log/report access, hash engine.\n"
         << "   Sub-flags: --fix, --quiet, --no-advice, --json\n"
         << "   Example: sentinel-c --doctor --fix\n\n"
+        << "   Related: --guard for security-focused hardening and baseline tamper checks.\n\n"
         << "8. --list-baseline\n"
         << "   Purpose: list tracked baseline entries.\n"
         << "   Sub-flags: --limit <n>, --json\n"
@@ -222,12 +233,14 @@ void print_explain() {
         << "    Sub-flags: --days <n>, --all, --dry-run\n"
         << "    Example: sentinel-c --purge-reports --days 30 --dry-run\n\n"
         << "Additional utility flags:\n"
+        << "  - --guard [--fix] [--quiet] [--no-advice] [--json]\n"
         << "  - --export-baseline <file> [--overwrite]\n"
         << "  - --import-baseline <file> [--force]\n"
         << "  - --tail-log [--lines N]\n"
         << "  - --report-index [--type all|cli|html|json|csv] [--limit N] [--json]\n"
+        << "  - --output-root <path> (set logs/reports/baseline destination for current command)\n"
         << "  - --prompt-mode [--target <path>] [--interval N] [--cycles N] [--reports] [--report-formats list] [--strict] [--hash-only]\n"
-        << "      Prompt keywords: banner, clear, exit\n"
+        << "      Prompt keywords: banner, clear, exit; prompt set command: set destination <path>\n"
         << "  - --version [--json]\n"
         << "  - --about\n"
         << "  - --explain\n";

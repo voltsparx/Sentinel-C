@@ -16,7 +16,7 @@ ExitCode dispatch(const ParsedArgs& parsed) {
     }
 
     if (command == "--about") {
-        if (!validate_known_options(parsed, {}, {})) {
+        if (!validate_known_options(parsed, {}, {"output-root"})) {
             return ExitCode::UsageError;
         }
         if (!reject_positionals(parsed)) {
@@ -27,7 +27,7 @@ ExitCode dispatch(const ParsedArgs& parsed) {
     }
 
     if (command == "--explain") {
-        if (!validate_known_options(parsed, {}, {})) {
+        if (!validate_known_options(parsed, {}, {"output-root"})) {
             return ExitCode::UsageError;
         }
         if (!reject_positionals(parsed)) {
@@ -38,7 +38,7 @@ ExitCode dispatch(const ParsedArgs& parsed) {
     }
 
     if (command == "--version") {
-        if (!validate_known_options(parsed, {"json"}, {})) {
+        if (!validate_known_options(parsed, {"json"}, {"output-root"})) {
             return ExitCode::UsageError;
         }
         if (!reject_positionals(parsed)) {
@@ -49,7 +49,7 @@ ExitCode dispatch(const ParsedArgs& parsed) {
     }
 
     if (command == "--init") {
-        if (!validate_known_options(parsed, {"force", "json", "quiet", "no-advice"}, {})) {
+        if (!validate_known_options(parsed, {"force", "json", "quiet", "no-advice"}, {"output-root"})) {
             return ExitCode::UsageError;
         }
         return handle_init(parsed);
@@ -58,7 +58,7 @@ ExitCode dispatch(const ParsedArgs& parsed) {
     if (command == "--scan") {
         if (!validate_known_options(parsed,
                                     {"json", "strict", "quiet", "no-advice", "no-reports", "hash-only"},
-                                    {"report-formats"})) {
+                                    {"report-formats", "output-root"})) {
             return ExitCode::UsageError;
         }
         return handle_scan_mode(parsed, ScanMode::Scan);
@@ -67,14 +67,14 @@ ExitCode dispatch(const ParsedArgs& parsed) {
     if (command == "--update") {
         if (!validate_known_options(parsed,
                                     {"json", "strict", "quiet", "no-advice", "no-reports", "hash-only"},
-                                    {"report-formats"})) {
+                                    {"report-formats", "output-root"})) {
             return ExitCode::UsageError;
         }
         return handle_scan_mode(parsed, ScanMode::Update);
     }
 
     if (command == "--status") {
-        if (!validate_known_options(parsed, {"json", "quiet", "no-advice", "hash-only"}, {})) {
+        if (!validate_known_options(parsed, {"json", "quiet", "no-advice", "hash-only"}, {"output-root"})) {
             return ExitCode::UsageError;
         }
         return handle_scan_mode(parsed, ScanMode::Status);
@@ -83,7 +83,7 @@ ExitCode dispatch(const ParsedArgs& parsed) {
     if (command == "--verify") {
         if (!validate_known_options(parsed,
                                     {"reports", "json", "strict", "quiet", "no-advice", "hash-only"},
-                                    {"report-formats"})) {
+                                    {"report-formats", "output-root"})) {
             return ExitCode::UsageError;
         }
         return handle_scan_mode(parsed, ScanMode::Verify);
@@ -92,63 +92,70 @@ ExitCode dispatch(const ParsedArgs& parsed) {
     if (command == "--watch") {
         if (!validate_known_options(parsed,
                                     {"reports", "fail-fast", "json", "strict", "quiet", "no-advice", "hash-only"},
-                                    {"interval", "cycles", "report-formats"})) {
+                                    {"interval", "cycles", "report-formats", "output-root"})) {
             return ExitCode::UsageError;
         }
         return handle_watch(parsed);
     }
 
     if (command == "--doctor") {
-        if (!validate_known_options(parsed, {"fix", "json", "quiet", "no-advice"}, {})) {
+        if (!validate_known_options(parsed, {"fix", "json", "quiet", "no-advice"}, {"output-root"})) {
             return ExitCode::UsageError;
         }
         return handle_doctor(parsed);
     }
 
+    if (command == "--guard") {
+        if (!validate_known_options(parsed, {"fix", "json", "quiet", "no-advice"}, {"output-root"})) {
+            return ExitCode::UsageError;
+        }
+        return handle_guard(parsed);
+    }
+
     if (command == "--list-baseline") {
-        if (!validate_known_options(parsed, {"json"}, {"limit"})) {
+        if (!validate_known_options(parsed, {"json"}, {"limit", "output-root"})) {
             return ExitCode::UsageError;
         }
         return handle_list_baseline(parsed);
     }
 
     if (command == "--show-baseline") {
-        if (!validate_known_options(parsed, {"json"}, {})) {
+        if (!validate_known_options(parsed, {"json"}, {"output-root"})) {
             return ExitCode::UsageError;
         }
         return handle_show_baseline(parsed);
     }
 
     if (command == "--export-baseline") {
-        if (!validate_known_options(parsed, {"overwrite"}, {})) {
+        if (!validate_known_options(parsed, {"overwrite"}, {"output-root"})) {
             return ExitCode::UsageError;
         }
         return handle_export_baseline(parsed);
     }
 
     if (command == "--import-baseline") {
-        if (!validate_known_options(parsed, {"force"}, {})) {
+        if (!validate_known_options(parsed, {"force"}, {"output-root"})) {
             return ExitCode::UsageError;
         }
         return handle_import_baseline(parsed);
     }
 
     if (command == "--purge-reports") {
-        if (!validate_known_options(parsed, {"all", "dry-run"}, {"days"})) {
+        if (!validate_known_options(parsed, {"all", "dry-run"}, {"days", "output-root"})) {
             return ExitCode::UsageError;
         }
         return handle_purge_reports(parsed);
     }
 
     if (command == "--tail-log") {
-        if (!validate_known_options(parsed, {}, {"lines"})) {
+        if (!validate_known_options(parsed, {}, {"lines", "output-root"})) {
             return ExitCode::UsageError;
         }
         return handle_tail_log(parsed);
     }
 
     if (command == "--report-index") {
-        if (!validate_known_options(parsed, {"json"}, {"limit", "type"})) {
+        if (!validate_known_options(parsed, {"json"}, {"limit", "type", "output-root"})) {
             return ExitCode::UsageError;
         }
         return handle_report_index(parsed);
@@ -157,7 +164,7 @@ ExitCode dispatch(const ParsedArgs& parsed) {
     if (command == "--prompt-mode") {
         if (!validate_known_options(parsed,
                                     {"reports", "strict", "quiet", "no-advice", "hash-only"},
-                                    {"target", "interval", "cycles", "report-formats"})) {
+                                    {"target", "interval", "cycles", "report-formats", "output-root"})) {
             return ExitCode::UsageError;
         }
         return handle_prompt(parsed);

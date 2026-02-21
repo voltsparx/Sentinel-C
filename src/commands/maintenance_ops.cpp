@@ -33,6 +33,10 @@ struct ReportItem {
     std::time_t modified = 0;
 };
 
+bool starts_with(const std::string& value, const std::string& prefix) {
+    return value.rfind(prefix, 0) == 0;
+}
+
 std::chrono::system_clock::time_point to_system_clock(const fs::file_time_type& file_time) {
     using namespace std::chrono;
     const auto system_now = std::chrono::system_clock::now();
@@ -76,6 +80,75 @@ std::string report_dir_for_type(const std::string& type) {
 bool is_valid_report_type(const std::string& type) {
     return type == "all" || type == "cli" || type == "html" || type == "json" || type == "csv";
 }
+
+std::string latest_log_file_path() {
+    std::error_code ec;
+    if (!fs::exists(config::LOG_DIR, ec)) {
+        return config::LOG_FILE;
+    }
+
+    fs::path latest_non_empty;
+    fs::path latest_any;
+    fs::file_time_type latest_non_empty_time{};
+    fs::file_time_type latest_any_time{};
+    bool have_non_empty = false;
+    bool have_any = false;
+
+    for (const auto& entry : fs::directory_iterator(config::LOG_DIR, ec)) {
+        if (ec || !entry.is_regular_file()) {
+            ec.clear();
+            continue;
+        }
+
+        const std::string name = entry.path().filename().generic_string();
+        if (!starts_with(name, "sentinel-c_activity_log_") || entry.path().extension() != ".log") {
+            continue;
+        }
+
+        const fs::file_time_type write_time = entry.last_write_time(ec);
+        if (ec) {
+            ec.clear();
+            continue;
+        }
+
+        if (!have_any || write_time > latest_any_time) {
+            latest_any = entry.path();
+            latest_any_time = write_time;
+            have_any = true;
+        }
+
+        const std::uintmax_t size = entry.file_size(ec);
+        if (ec) {
+            ec.clear();
+            continue;
+        }
+
+        if (size > 0 && (!have_non_empty || write_time > latest_non_empty_time)) {
+            latest_non_empty = entry.path();
+            latest_non_empty_time = write_time;
+            have_non_empty = true;
+        }
+    }
+
+    if (have_non_empty) {
+        return normalize_path(latest_non_empty.generic_string());
+    }
+    if (have_any) {
+        return normalize_path(latest_any.generic_string());
+    }
+    return config::LOG_FILE;
+}
+
+#ifndef _WIN32
+bool others_writable(const std::string& path) {
+    std::error_code ec;
+    const auto perms = fs::status(path, ec).permissions();
+    if (ec) {
+        return false;
+    }
+    return (perms & fs::perms::others_write) != fs::perms::none;
+}
+#endif
 
 } // namespace
 
@@ -159,9 +232,10 @@ ExitCode handle_tail_log(const ParsedArgs& parsed) {
         return ExitCode::UsageError;
     }
 
-    std::ifstream in(config::LOG_FILE);
+    const std::string log_path = latest_log_file_path();
+    std::ifstream in(log_path);
     if (!in.is_open()) {
-        logger::error("Log file not found: " + config::LOG_FILE);
+        logger::error("Log file not found: " + log_path);
         return ExitCode::OperationFailed;
     }
 
@@ -245,10 +319,20 @@ ExitCode handle_doctor(const ParsedArgs& parsed) {
         scanner::FileMap baseline;
         std::string baseline_root;
         if (scanner::load_baseline(baseline, &baseline_root)) {
-            push_check("baseline", "pass",
-                       baseline_root.empty() ? "baseline found" : baseline_root);
+            const std::string warning = scanner::baseline_last_warning();
+            push_check("baseline", warning.empty() ? "pass" : "warn",
+                       warning.empty()
+                           ? (baseline_root.empty() ? "baseline found" : baseline_root)
+                           : warning);
         } else {
-            push_check("baseline", "warn", "baseline missing; run --init");
+            const std::string detail = scanner::baseline_last_error();
+            if (detail.find("not found") != std::string::npos ||
+                detail.find("Not found") != std::string::npos) {
+                push_check("baseline", "warn", "baseline missing; run --init");
+            } else {
+                push_check("baseline", "fail",
+                           detail.empty() ? "baseline verification failed" : detail);
+            }
         }
     }
 
@@ -332,6 +416,152 @@ ExitCode handle_doctor(const ParsedArgs& parsed) {
         return ExitCode::OperationFailed;
     }
     return ExitCode::Ok;
+}
+
+ExitCode handle_guard(const ParsedArgs& parsed) {
+    if (!reject_positionals(parsed)) {
+        return ExitCode::UsageError;
+    }
+
+    const bool as_json = has_switch(parsed, "json");
+    const bool fix = has_switch(parsed, "fix");
+    const bool quiet = has_switch(parsed, "quiet");
+    const bool no_advice = has_switch(parsed, "no-advice");
+
+    if (fix) {
+        fsutil::ensure_dirs();
+    }
+
+    std::vector<DoctorCheck> checks;
+    auto push_check = [&checks](const std::string& name,
+                                const std::string& level,
+                                const std::string& detail) {
+        checks.push_back(DoctorCheck{name, detail, level});
+    };
+
+    std::error_code ec;
+    push_check("output_root", fs::exists(config::ROOT_DIR, ec) ? "pass" : "fail", config::ROOT_DIR);
+
+#ifndef _WIN32
+    if (fs::exists(config::ROOT_DIR, ec)) {
+        push_check("output_root_permissions",
+                   others_writable(config::ROOT_DIR) ? "warn" : "pass",
+                   others_writable(config::ROOT_DIR)
+                       ? "output root is writable by other users"
+                       : "output root permissions are restricted");
+    }
+#else
+    push_check("output_root_permissions", "pass", "permission check not required on this platform");
+#endif
+
+    scanner::FileMap baseline;
+    std::string baseline_root;
+    if (!scanner::load_baseline(baseline, &baseline_root)) {
+        const std::string detail = scanner::baseline_last_error();
+        if (detail.find("not found") != std::string::npos ||
+            detail.find("Not found") != std::string::npos) {
+            push_check("baseline", "warn", "baseline missing; run --init");
+        } else {
+            push_check("baseline_integrity", "fail", detail.empty() ? "baseline verification failed" : detail);
+        }
+    } else {
+        const std::string warning = scanner::baseline_last_warning();
+        push_check("baseline_integrity", warning.empty() ? "pass" : "warn",
+                   warning.empty() ? "baseline seal verified" : warning);
+    }
+
+    const fs::path log_path(config::LOG_FILE);
+    const std::string log_name = log_path.filename().generic_string();
+    const bool log_name_ok =
+        starts_with(log_name, "sentinel-c_activity_log_") && log_path.extension() == ".log";
+    push_check("log_naming", log_name_ok ? "pass" : "warn",
+               log_name_ok ? log_name : "log file naming pattern is not timestamped");
+
+    if (fs::exists(config::IGNORE_FILE, ec) || fs::exists("src/.sentinelignore", ec)) {
+        push_check("ignore_rules", "pass", "ignore rules detected");
+    } else {
+        push_check("ignore_rules", "warn", "ignore file missing");
+    }
+
+    {
+        const fs::path tmp_file =
+            fs::path(config::DATA_DIR) / (".guard_hash_" + fsutil::timestamp() + ".tmp");
+        std::ofstream out(tmp_file.string(), std::ios::trunc);
+        out << "guard-check";
+        out.close();
+        const std::string digest = hash::sha256_file(tmp_file.string());
+        fs::remove(tmp_file, ec);
+        push_check("hash_engine", digest.empty() ? "fail" : "pass",
+                   digest.empty() ? "sha256 failed" : "sha256 operational");
+    }
+
+    std::size_t pass_count = 0;
+    std::size_t warn_count = 0;
+    std::size_t fail_count = 0;
+    for (const DoctorCheck& check : checks) {
+        if (check.level == "pass") ++pass_count;
+        else if (check.level == "warn") ++warn_count;
+        else ++fail_count;
+    }
+
+    if (as_json) {
+        std::cout << "{\n"
+                  << "  \"command\": \"guard\",\n"
+                  << "  \"pass\": " << pass_count << ",\n"
+                  << "  \"warn\": " << warn_count << ",\n"
+                  << "  \"fail\": " << fail_count << ",\n"
+                  << "  \"checks\": [\n";
+        for (std::size_t i = 0; i < checks.size(); ++i) {
+            const DoctorCheck& check = checks[i];
+            std::cout << "    {\"name\":\"" << json_escape(check.name)
+                      << "\",\"level\":\"" << check.level
+                      << "\",\"detail\":\"" << json_escape(check.detail) << "\"}";
+            if (i + 1 < checks.size()) {
+                std::cout << ",";
+            }
+            std::cout << "\n";
+        }
+        std::cout << "  ]\n}\n";
+    } else {
+        if (!quiet) {
+            std::cout << colorize("Sentinel-C Guard Report", ANSI_CYAN) << "\n";
+            for (const DoctorCheck& check : checks) {
+                std::string label = "[PASS]";
+                const char* color = ANSI_GREEN;
+                if (check.level == "warn") {
+                    label = "[WARN]";
+                    color = ANSI_YELLOW;
+                } else if (check.level == "fail") {
+                    label = "[FAIL]";
+                    color = ANSI_RED;
+                }
+
+                std::cout << colorize(label, color) << " "
+                          << std::left << std::setw(24) << check.name
+                          << " " << check.detail << "\n";
+            }
+        }
+        std::cout << "\nGuard Summary: "
+                  << pass_count << " pass, "
+                  << warn_count << " warn, "
+                  << fail_count << " fail\n";
+        if (!quiet && !no_advice) {
+            std::vector<std::string> advice;
+            if (fail_count == 0 && warn_count == 0) {
+                advice.push_back("Security guard checks passed.");
+                advice.push_back("Baseline seal and output paths look healthy.");
+            } else if (fail_count == 0) {
+                advice.push_back("Guard checks reported warnings.");
+                advice.push_back("Please resolve warnings to improve hardening.");
+            } else {
+                advice.push_back("Guard checks reported failures.");
+                advice.push_back("Please resolve failures before trusting scan outcomes.");
+            }
+            print_advice(advice);
+        }
+    }
+
+    return fail_count > 0 ? ExitCode::OperationFailed : ExitCode::Ok;
 }
 
 ExitCode handle_report_index(const ParsedArgs& parsed) {

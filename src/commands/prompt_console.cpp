@@ -3,6 +3,7 @@
 #include "dispatcher.h"
 #include "../banner.h"
 #include "../core/config.h"
+#include "../core/fsutil.h"
 #include "../core/logger.h"
 #include <algorithm>
 #include <atomic>
@@ -124,11 +125,18 @@ std::string style(const std::string& text, const char* color) {
 
 void clear_screen() {
 #ifdef _WIN32
-    std::system("cls");
+    const int rc = std::system("cls");
+    if (rc != 0) {
+        // ANSI fallback for shells where cls is unavailable.
+        std::cout << "\033[2J\033[H";
+    }
 #else
     const char* term = std::getenv("TERM");
     if (term != nullptr && term[0] != '\0') {
-        std::system("clear");
+        const int rc = std::system("clear");
+        if (rc != 0) {
+            std::cout << "\033[2J\033[H";
+        }
     } else {
         // Fallback when TERM is unavailable (non-interactive shells/pipes).
         std::cout << "\033[2J\033[H";
@@ -142,20 +150,21 @@ void print_prompt_help() {
         << "  help                         Show this prompt help\n"
         << "  show config                  Show current session configuration\n"
         << "  set target <path>            Set default target directory\n"
+        << "  set destination <path>       Set log/report/baseline destination root\n"
         << "  set interval <n>             Set default watch interval in seconds\n"
         << "  set cycles <n>               Set default watch cycles\n"
         << "  set reports <on|off>         Enable/disable report generation for verify/watch\n"
         << "  set strict <on|off>          Return exit 2 on drift for scan/update\n"
         << "  set hash-only <on|off>       Compare by hash+size only (ignore mtime drift)\n"
         << "  set quiet <on|off>           Reduce terminal output volume\n"
-        << "  set advice <on|off>          Enable/disable Nano Advisor in terminal\n"
+        << "  set advice <on|off>          Enable/disable guidance in terminal\n"
         << "  set formats <csv|cli|html|json|all|none[,..]>\n"
         << "                               Default report formats for report-generating commands\n"
         << "  use <path>                   Shortcut for: set target <path>\n"
         << "  run <command ...>            Execute a command with session defaults\n"
         << "\n"
         << "Direct command aliases:\n"
-        << "  init | scan | update | status | verify | watch | doctor\n"
+        << "  init | scan | update | status | verify | watch | doctor | guard\n"
         << "  list-baseline | show-baseline | export-baseline | import-baseline\n"
         << "  purge-reports | tail-log | report-index | version | about | explain | help\n"
         << "\n"
@@ -169,6 +178,7 @@ void print_prompt_config(const PromptSession& session) {
     std::cout
         << "Prompt Session Config\n"
         << "  target        : " << (session.target.empty() ? "(not set)" : session.target) << "\n"
+        << "  output-root   : " << config::output_root() << "\n"
         << "  interval      : " << session.interval << "\n"
         << "  cycles        : " << session.cycles << "\n"
         << "  reports       : " << (session.reports ? "on" : "off") << "\n"
@@ -188,6 +198,7 @@ std::unordered_map<std::string, std::string> alias_map() {
         {"verify", "--verify"},
         {"watch", "--watch"},
         {"doctor", "--doctor"},
+        {"guard", "--guard"},
         {"list-baseline", "--list-baseline"},
         {"show-baseline", "--show-baseline"},
         {"export-baseline", "--export-baseline"},
@@ -215,7 +226,8 @@ bool option_consumes_next(const std::string& token) {
     }
     const std::string key = token.substr(2);
     return key == "interval" || key == "cycles" || key == "report-formats" ||
-           key == "limit" || key == "lines" || key == "type" || key == "days";
+           key == "limit" || key == "lines" || key == "type" || key == "days" ||
+           key == "output-root";
 }
 
 bool has_positional_token(const std::vector<std::string>& tokens) {
@@ -279,7 +291,7 @@ void apply_session_defaults(std::vector<std::string>& tokens, const PromptSessio
     const bool toggle_capable =
         command == "--init" || command == "--scan" || command == "--update" ||
         command == "--status" || command == "--verify" || command == "--watch" ||
-        command == "--doctor";
+        command == "--doctor" || command == "--guard";
     if (toggle_capable) {
         if (session.strict && !token_exists(tokens, "--strict") &&
             (command == "--scan" || command == "--update")) {
@@ -328,7 +340,7 @@ void on_sigint(int) {
 
 bool handle_set(PromptSession& session, const std::vector<std::string>& tokens) {
     if (tokens.size() < 3) {
-        logger::error("Usage: set <target|interval|cycles|reports|strict|hash-only|quiet|advice|formats> <value>");
+        logger::error("Usage: set <target|destination|interval|cycles|reports|strict|hash-only|quiet|advice|formats> <value>");
         return true;
     }
 
@@ -338,6 +350,17 @@ bool handle_set(PromptSession& session, const std::vector<std::string>& tokens) 
     if (key == "target") {
         session.target = value;
         logger::success("Default target updated.");
+        return true;
+    }
+    if (key == "destination" || key == "output-root" || key == "output") {
+        std::string error;
+        if (!config::set_output_root(value, &error)) {
+            logger::error("Failed to set destination: " + error);
+            return true;
+        }
+        fsutil::ensure_dirs();
+        logger::reopen();
+        logger::success("Output destination updated: " + config::output_root());
         return true;
     }
 
@@ -485,6 +508,15 @@ bool run_prompt_command(PromptSession& session, const std::vector<std::string>& 
     if (parsed.command == "--prompt-mode" || parsed.command == "--prompt") {
         logger::error("Prompt mode is already active.");
         return true;
+    }
+    if (const auto output_root = option_value(parsed, "output-root"); output_root.has_value()) {
+        std::string error;
+        if (!config::set_output_root(*output_root, &error)) {
+            logger::error("Failed to set output destination: " + error);
+            return true;
+        }
+        fsutil::ensure_dirs();
+        logger::reopen();
     }
 
     const ExitCode code = dispatch(parsed);

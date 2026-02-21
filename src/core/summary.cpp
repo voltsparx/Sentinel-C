@@ -44,7 +44,8 @@ void print_summary(
     << "  JSON Report : " << p.json_report << "\n"
     << "  CSV Report  : " << p.csv_report << "\n"
     << "  Log File    : " << p.log_file << "\n"
-    << "  Baseline    : " << p.baseline << "\n\n";
+    << "  Baseline    : " << p.baseline << "\n"
+    << "  Seal File   : " << p.baseline_seal << "\n\n";
 
     if (!baseline_ok) {
         std::cout <<

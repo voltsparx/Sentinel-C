@@ -11,6 +11,7 @@ enum class Level {
 };
 
 void init();
+void reopen();
 void write(Level level, const std::string& message);
 void info(const std::string& message);
 void success(const std::string& message);

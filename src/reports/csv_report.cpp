@@ -120,7 +120,8 @@ void write_advisor_block(std::ofstream& out, const AdvisorNarrative& narrative) 
 
 std::string write_csv(const scanner::ScanResult& result, const std::string& scan_id) {
     const std::string id = scan_id.empty() ? fsutil::timestamp() : scan_id;
-    const std::string file = config::REPORT_CSV_DIR + "/scan_" + id + ".csv";
+    const std::string file =
+        config::REPORT_CSV_DIR + "/sentinel-c_integrity_csv_report_" + id + ".csv";
 
     std::ofstream out(file, std::ios::trunc);
     if (!out.is_open()) {

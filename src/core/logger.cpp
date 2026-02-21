@@ -59,6 +59,14 @@ void init() {
     }
 }
 
+void reopen() {
+    std::lock_guard<std::mutex> guard(log_mutex);
+    if (log_stream.is_open()) {
+        log_stream.close();
+    }
+    log_stream.open(config::LOG_FILE, std::ios::app);
+}
+
 void write(Level level, const std::string& message) {
     std::lock_guard<std::mutex> guard(log_mutex);
     const std::string prefix =

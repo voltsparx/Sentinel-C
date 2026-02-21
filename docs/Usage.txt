@@ -73,6 +73,10 @@ Release note:
   Run environment and storage checks.
   Sub-flags: --fix, --quiet, --no-advice, --json
 
+--guard
+  Run security-focused hardening checks and baseline tamper checks.
+  Sub-flags: --fix, --quiet, --no-advice, --json
+
 --list-baseline
   List tracked baseline entries.
   Sub-flags: --limit <n>, --json
@@ -97,6 +101,7 @@ Release note:
 --about
 --explain
 --help
+--output-root <path> (supported by operational commands)
 
 ============================================================
 5) EXIT CODES
@@ -111,28 +116,30 @@ Release note:
 ============================================================
 6) OUTPUT LOCATIONS
 ============================================================
-Sentinel-C writes under project root:
+Sentinel-C writes under binary directory by default:
   sentinel-c-logs/data/.sentinel-baseline
-  sentinel-c-logs/logs/.sentinel-logs
-  sentinel-c-logs/reports/cli/scan_<timestamp>.txt
-  sentinel-c-logs/reports/html/scan_<timestamp>.html
-  sentinel-c-logs/reports/json/scan_<timestamp>.json
-  sentinel-c-logs/reports/csv/scan_<timestamp>.csv
+  sentinel-c-logs/data/.sentinel-baseline.seal
+  sentinel-c-logs/logs/sentinel-c_activity_log_<YYYYMMDD_HHMMSS_mmm>.log
+  sentinel-c-logs/reports/cli/sentinel-c_integrity_cli_report_<YYYYMMDD_HHMMSS_mmm>.txt
+  sentinel-c-logs/reports/html/sentinel-c_integrity_html_report_<YYYYMMDD_HHMMSS_mmm>.html
+  sentinel-c-logs/reports/json/sentinel-c_integrity_json_report_<YYYYMMDD_HHMMSS_mmm>.json
+  sentinel-c-logs/reports/csv/sentinel-c_integrity_csv_report_<YYYYMMDD_HHMMSS_mmm>.csv
 
 Terminal output prints absolute report paths.
-You can override the root log/report location by setting SENTINEL_ROOT.
-Reports include Nano Advisor sections:
+You can override destination with:
+  - command option: --output-root <path>
+  - environment variable: SENTINEL_ROOT
+Reports include a guidance block with:
   - Risk level
   - Summary
-  - Why this matters
-  - What matters now
-  - Teaching notes
-  - Suggested next steps
+  - Clear follow-up sentences
 
 Prompt mode keywords:
   - banner (clears screen, then prints the banner)
   - clear (clears the console)
   - exit or Ctrl+C (leaves prompt mode)
+Prompt destination command:
+  - set destination <path>
 
 ============================================================
 7) IMPORTANT CORNERS
@@ -170,6 +177,7 @@ Sentinel-C includes platform build scripts:
   building-scripts/build-windows.ps1
   building-scripts/build-linux.sh
   building-scripts/build-macos.sh
+  termux-support/build-termux.sh
 
 Windows (PowerShell):
   powershell -ExecutionPolicy Bypass -File .\building-scripts\build-windows.ps1 -Configuration Release -Clean
@@ -180,8 +188,12 @@ Linux:
 macOS:
   bash building-scripts/build-macos.sh --build-type Release --clean
 
+Termux (Android):
+  bash termux-support/build-termux.sh
+
 Script behavior:
   - validates required tooling
   - runs configure/build
   - verifies binary exists
-  - copies binary to bin-releases/<platform>/
+  - copies binary to bin-releases/<platform>/releases/bin/
+  - termux script checks missing tools and can install them after user approval

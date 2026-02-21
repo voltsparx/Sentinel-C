@@ -30,7 +30,7 @@ Repository-level build helpers are stored in `building-scripts/`:
 - `build-macos.sh`: shell automation for macOS
 
 These scripts standardize configure/build/verification steps and copy binaries
-to `bin-releases/<platform>/`.
+to `bin-releases/<platform>/releases/bin/`.
 
 ## Runtime Flow
 
@@ -73,7 +73,7 @@ to `bin-releases/<platform>/`.
 
 ### Baseline file format (v2)
 
-Stored at `sentinel-c-logs/data/.sentinel-baseline`:
+Stored at `<output-root>/sentinel-c-logs/data/.sentinel-baseline`:
 
 - Header metadata:
   - `root\t<path>`
@@ -82,6 +82,12 @@ Stored at `sentinel-c-logs/data/.sentinel-baseline`:
   - `file\t<path>\t<sha256>\t<size>\t<mtime>`
 
 Backward compatibility for legacy `path|size|hash` entries remains supported.
+
+Baseline tamper guard:
+
+- Seal file: `<output-root>/sentinel-c-logs/data/.sentinel-baseline.seal`
+- Seal digest: SHA-256 over baseline file contents
+- Load-time verification is enforced; mismatches are treated as operation failures
 
 ### Scan result model
 

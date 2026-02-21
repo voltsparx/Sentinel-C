@@ -20,5 +20,7 @@ ScanResult compare(const FileMap& baseline, const FileMap& current);
 ScanResult compare(const FileMap& baseline, const FileMap& current, bool consider_mtime);
 bool load_baseline(FileMap& baseline, std::string* baseline_root = nullptr);
 bool save_baseline(const FileMap& data, const std::string& baseline_root);
+const std::string& baseline_last_error();
+const std::string& baseline_last_warning();
 
 }

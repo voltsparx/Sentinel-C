@@ -253,6 +253,15 @@ ExitCode handle_import_baseline(const ParsedArgs& parsed) {
         return ExitCode::OperationFailed;
     }
 
+    if (!scanner::save_baseline(loaded.files, loaded.root)) {
+        if (baseline_exists) {
+            fs::copy_file(backup_path, config::BASELINE_DB, fs::copy_options::overwrite_existing, ec);
+        }
+        const std::string detail = scanner::baseline_last_error();
+        logger::error(detail.empty() ? "Failed to re-seal imported baseline." : detail);
+        return ExitCode::OperationFailed;
+    }
+
     fs::remove(backup_path, ec);
     logger::success("Baseline imported successfully.");
     if (!loaded.root.empty()) {

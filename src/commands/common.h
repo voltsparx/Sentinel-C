@@ -51,6 +51,7 @@ bool is_directory_path(const std::string& path);
 core::OutputPaths default_outputs();
 
 void print_scan_json(const std::string& command, const ScanOutcome& outcome, ExitCode code);
+void print_no_command_hint();
 void print_usage_lines();
 void print_help();
 void print_version(bool as_json);

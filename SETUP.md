@@ -20,7 +20,7 @@ Before building Sentinel-C, ensure you have:
 
 Sentinel-C provides platform scripts in `building-scripts/` with strict error handling.
 Each script validates tools, runs configure + build, verifies the binary, and copies it
-to `bin-releases/<platform>/`.
+to `bin-releases/<platform>/releases/bin/`.
 
 ### Windows (PowerShell)
 
@@ -59,6 +59,20 @@ Optional parameters:
 - `--generator "<cmake-generator>"`
 - `--jobs <n>`
 - `--clean`
+
+### Termux (Android)
+
+```bash
+bash termux-support/build-termux.sh
+```
+
+Optional parameters:
+- `--build-dir build-termux`
+- `--build-type Release|Debug|RelWithDebInfo|MinSizeRel`
+- `--jobs <n>`
+- `--clean`
+- `--yes` (auto-approve missing package installs)
+- `--no-install` (fail if required tools are missing)
 
 ---
 
@@ -226,6 +240,7 @@ Sentinel-C v4.0
 --verify <path>         Verification workflow (optional reports)
 --watch <path>          Continuous interval-based monitoring
 --doctor                Environment and storage diagnostics
+--guard                 Security-focused hardening checks
 --list-baseline         List tracked baseline entries
 --show-baseline <path>  Show a specific baseline entry
 --export-baseline <f>   Export baseline to file
@@ -239,6 +254,11 @@ Sentinel-C v4.0
 --explain               Explain major flags with examples
 --help                  Show help
 ```
+
+Output destination:
+- Default runtime storage path is alongside the built binary (`<binary-dir>/sentinel-c-logs`).
+- You can override per command using `--output-root <path>`.
+- Logs/reports are written with timestamped meaningful filenames.
 
 ---
 

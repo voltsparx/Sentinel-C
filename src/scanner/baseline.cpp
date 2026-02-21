@@ -1,11 +1,35 @@
 #include "scanner.h"
 #include "../core/config.h"
 #include "../core/fsutil.h"
+#include "hash.h"
+#include <filesystem>
 #include <fstream>
+#include <system_error>
 #include <string>
 #include <utility>
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
 
 namespace {
+
+namespace fs = std::filesystem;
+
+std::string g_last_baseline_error;
+std::string g_last_baseline_warning;
+
+void clear_baseline_status() {
+    g_last_baseline_error.clear();
+    g_last_baseline_warning.clear();
+}
+
+void tighten_file_permissions(const std::string& path) {
+#ifndef _WIN32
+    ::chmod(path.c_str(), S_IRUSR | S_IWUSR);
+#else
+    (void)path;
+#endif
+}
 
 bool parse_entry(std::string line, core::FileEntry& entry) {
     const std::size_t p1 = line.find('\t');
@@ -45,18 +69,87 @@ bool parse_entry(std::string line, core::FileEntry& entry) {
     return true;
 }
 
+bool read_seal_digest(std::string& digest, std::string& error) {
+    digest.clear();
+    std::ifstream in(config::BASELINE_SEAL_FILE);
+    if (!in.is_open()) {
+        error = "Baseline seal file not found: " + config::BASELINE_SEAL_FILE;
+        return false;
+    }
+
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.rfind("digest\t", 0) == 0) {
+            digest = line.substr(7);
+            break;
+        }
+    }
+
+    if (digest.empty()) {
+        error = "Baseline seal file is invalid: " + config::BASELINE_SEAL_FILE;
+        return false;
+    }
+    return true;
+}
+
+bool verify_baseline_seal(std::string& error, std::string& warning) {
+    error.clear();
+    warning.clear();
+
+    std::error_code ec;
+    if (!fs::exists(config::BASELINE_DB, ec)) {
+        error = "Baseline file not found: " + config::BASELINE_DB;
+        return false;
+    }
+
+    if (!fs::exists(config::BASELINE_SEAL_FILE, ec)) {
+        warning = "Baseline seal is missing. Re-run --update to enable tamper guard.";
+        return true;
+    }
+
+    std::string expected_digest;
+    if (!read_seal_digest(expected_digest, error)) {
+        return false;
+    }
+
+    const std::string actual_digest = hash::sha256_file(config::BASELINE_DB);
+    if (actual_digest.empty()) {
+        error = "Failed to hash baseline during tamper verification.";
+        return false;
+    }
+
+    if (actual_digest != expected_digest) {
+        error =
+            "Baseline tamper guard failed: seal digest mismatch. "
+            "Baseline may have been modified outside Sentinel-C.";
+        return false;
+    }
+
+    return true;
+}
+
 } // namespace
 
 namespace scanner {
 
 bool load_baseline(FileMap& baseline, std::string* baseline_root) {
+    clear_baseline_status();
     baseline.clear();
     if (baseline_root != nullptr) {
         *baseline_root = "";
     }
 
+    std::string seal_error;
+    std::string seal_warning;
+    if (!verify_baseline_seal(seal_error, seal_warning)) {
+        g_last_baseline_error = seal_error;
+        return false;
+    }
+    g_last_baseline_warning = seal_warning;
+
     std::ifstream in(config::BASELINE_DB);
     if (!in.is_open()) {
+        g_last_baseline_error = "Baseline file not found: " + config::BASELINE_DB;
         return false;
     }
 
@@ -92,12 +185,17 @@ bool load_baseline(FileMap& baseline, std::string* baseline_root) {
         seen_content = true;
     }
 
+    if (!seen_content) {
+        g_last_baseline_error = "Baseline file is empty or invalid: " + config::BASELINE_DB;
+    }
     return seen_content;
 }
 
 bool save_baseline(const FileMap& data, const std::string& baseline_root) {
+    clear_baseline_status();
     std::ofstream out(config::BASELINE_DB, std::ios::trunc);
     if (!out.is_open()) {
+        g_last_baseline_error = "Failed to open baseline file for write: " + config::BASELINE_DB;
         return false;
     }
 
@@ -113,7 +211,47 @@ bool save_baseline(const FileMap& data, const std::string& baseline_root) {
             << entry.size << '\t'
             << entry.mtime << "\n";
     }
+    out.close();
+    if (!out) {
+        g_last_baseline_error = "Failed to flush baseline file: " + config::BASELINE_DB;
+        return false;
+    }
+    tighten_file_permissions(config::BASELINE_DB);
+
+    const std::string digest = hash::sha256_file(config::BASELINE_DB);
+    if (digest.empty()) {
+        g_last_baseline_error = "Failed to hash baseline while creating seal.";
+        return false;
+    }
+
+    std::ofstream seal(config::BASELINE_SEAL_FILE, std::ios::trunc);
+    if (!seal.is_open()) {
+        g_last_baseline_error =
+            "Failed to open baseline seal file for write: " + config::BASELINE_SEAL_FILE;
+        return false;
+    }
+
+    seal << "# Sentinel-C baseline seal v1\n";
+    seal << "algorithm\tSHA256\n";
+    seal << "created\t" << fsutil::timestamp() << "\n";
+    seal << "digest\t" << digest << "\n";
+    seal.close();
+    if (!seal) {
+        g_last_baseline_error =
+            "Failed to flush baseline seal file: " + config::BASELINE_SEAL_FILE;
+        return false;
+    }
+    tighten_file_permissions(config::BASELINE_SEAL_FILE);
+
     return true;
+}
+
+const std::string& baseline_last_error() {
+    return g_last_baseline_error;
+}
+
+const std::string& baseline_last_warning() {
+    return g_last_baseline_warning;
 }
 
 } // namespace scanner
