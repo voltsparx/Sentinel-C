@@ -25,6 +25,7 @@ struct OutputPaths {
     std::string cli_report;
     std::string html_report;
     std::string json_report;
+    std::string csv_report;
     std::string log_file;
     std::string baseline;
 };

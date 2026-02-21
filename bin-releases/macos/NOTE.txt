@@ -1,0 +1,10 @@
+macOS release layout is prepared.
+
+Status:
+- Folder structure is ready for packaging.
+- Binary and release payload are not included yet.
+
+Planned target location when ready:
+- bin-releases/macos/releases/bin/sentinel-c
+
+Add platform files here before creating archives.

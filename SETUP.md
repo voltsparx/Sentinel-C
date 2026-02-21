@@ -1,4 +1,4 @@
-# Sentinel-C v3.50 - Build & Setup Guide
+# Sentinel-C v4.0 - Build & Setup Guide
 
 ## ⚠️ Requirements
 
@@ -13,6 +13,52 @@ Before building Sentinel-C, ensure you have:
    - **macOS**: Xcode Command Line Tools
 
 3. **Git** (optional, for cloning the repository)
+
+---
+
+## 🚀 Automated Build Scripts (Recommended)
+
+Sentinel-C provides platform scripts in `building-scripts/` with strict error handling.
+Each script validates tools, runs configure + build, verifies the binary, and copies it
+to `bin-releases/<platform>/`.
+
+### Windows (PowerShell)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\building-scripts\build-windows.ps1 -Configuration Release -Clean
+```
+
+Optional parameters:
+- `-BuildDir build-windows`
+- `-Configuration Release|Debug|RelWithDebInfo|MinSizeRel`
+- `-Generator "Visual Studio 17 2022"` (or another installed generator)
+- `-Clean`
+
+### Linux
+
+```bash
+bash building-scripts/build-linux.sh --build-type Release --clean
+```
+
+Optional parameters:
+- `--build-dir build-linux`
+- `--build-type Release|Debug|RelWithDebInfo|MinSizeRel`
+- `--generator "<cmake-generator>"`
+- `--jobs <n>`
+- `--clean`
+
+### macOS
+
+```bash
+bash building-scripts/build-macos.sh --build-type Release --clean
+```
+
+Optional parameters:
+- `--build-dir build-macos`
+- `--build-type Release|Debug|RelWithDebInfo|MinSizeRel`
+- `--generator "<cmake-generator>"`
+- `--jobs <n>`
+- `--clean`
 
 ---
 
@@ -171,11 +217,27 @@ After building, verify the executable works:
 
 Expected output:
 ```
-Sentinel-C v3.50
+Sentinel-C v4.0
 
---init <path>    Initialize baseline for a directory
---scan <path>    Scan directory and compare against baseline
---help           Show this help message
+--init <path>           Initialize baseline
+--scan <path>           Scan and report changes (CLI/HTML/JSON/CSV)
+--update <path>         Scan and refresh baseline
+--status <path>         CI-friendly integrity status
+--verify <path>         Verification workflow (optional reports)
+--watch <path>          Continuous interval-based monitoring
+--doctor                Environment and storage diagnostics
+--list-baseline         List tracked baseline entries
+--show-baseline <path>  Show a specific baseline entry
+--export-baseline <f>   Export baseline to file
+--import-baseline <f>   Import baseline from file
+--purge-reports         Remove old report artifacts
+--tail-log              Tail Sentinel-C log output
+--report-index          List report artifacts (supports JSON output)
+--prompt-mode           Guided interactive console mode
+--version               Show version metadata
+--about                 Show trust-focused tool overview
+--explain               Explain major flags with examples
+--help                  Show help
 ```
 
 ---
@@ -246,6 +308,12 @@ cmake --build .
 
 # Scan for changes
 ./sentinel-c --scan /path/to/directory
+
+# Run health diagnostics
+./sentinel-c --doctor
+
+# Use CI-friendly status check
+./sentinel-c --status /path/to/directory
 
 # View reports in sentinel-c-logs/reports/
 ```

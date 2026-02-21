@@ -1,0 +1,187 @@
+Sentinel-C v4.0 - Usage Guide
+Author: voltsparx
+Contact: voltsparx@gmail.com
+
+============================================================
+1) BASIC IDEA
+============================================================
+Sentinel-C creates a trusted baseline of a target directory.
+Later scans compare current files to that baseline and detect:
+  - NEW files
+  - MODIFIED files
+  - DELETED files
+
+It is designed for local, defensive integrity monitoring.
+
+============================================================
+2) QUICK START
+============================================================
+Initialize baseline:
+  sentinel-c --init <path>
+
+Scan for integrity changes:
+  sentinel-c --scan <path>
+
+CI-friendly status check:
+  sentinel-c --status <path>
+
+Refresh baseline after approved changes:
+  sentinel-c --update <path>
+
+Examples:
+  sentinel-c --init /tmp/target
+  sentinel-c --scan /tmp/target
+  sentinel-c --status /tmp/target
+  sentinel-c --update /tmp/target
+
+Windows example:
+  sentinel-c.exe --init "C:\Work\Target"
+  sentinel-c.exe --scan "C:\Work\Target"
+
+Release note:
+  - Windows and Linux release packages are currently available.
+  - macOS release package will be published soon.
+
+============================================================
+3) MAJOR COMMANDS
+============================================================
+--init <path>
+  Create baseline for target path.
+  Sub-flags: --force, --quiet, --no-advice, --json
+
+--scan <path>
+  Compare current files with baseline and generate reports.
+  Sub-flags: --report-formats <list>, --strict, --hash-only, --quiet, --no-advice, --no-reports, --json
+
+--update <path>
+  Scan then refresh baseline.
+  Sub-flags: --report-formats <list>, --strict, --hash-only, --quiet, --no-advice, --no-reports, --json
+
+--status <path>
+  Return clean/changed using deterministic exit code.
+  Sub-flags: --hash-only, --quiet, --no-advice, --json
+
+--verify <path>
+  Verification workflow, optional report generation.
+  Sub-flags: --reports, --report-formats <list>, --strict, --hash-only, --quiet, --no-advice, --json
+
+--watch <path>
+  Repeat scan in cycles.
+  Sub-flags: --interval <sec>, --cycles <n>, --reports, --report-formats <list>, --fail-fast, --hash-only, --quiet, --no-advice, --json
+
+--doctor
+  Run environment and storage checks.
+  Sub-flags: --fix, --quiet, --no-advice, --json
+
+--list-baseline
+  List tracked baseline entries.
+  Sub-flags: --limit <n>, --json
+
+--show-baseline <path>
+  Show one baseline entry.
+  Sub-flags: --json
+
+--purge-reports
+  Remove old reports.
+  Sub-flags: --days <n>, --all, --dry-run
+
+============================================================
+4) UTILITY COMMANDS
+============================================================
+--export-baseline <file> [--overwrite]
+--import-baseline <file> [--force]
+--tail-log [--lines <n>]
+--report-index [--type all|cli|html|json|csv] [--limit <n>] [--json]
+--prompt-mode [--target <path>] [--interval <sec>] [--cycles <n>] [--reports] [--report-formats <list>] [--strict] [--hash-only] [--quiet] [--no-advice]
+--version [--json]
+--about
+--explain
+--help
+
+============================================================
+5) EXIT CODES
+============================================================
+0  Success / clean status
+1  Usage or argument error
+2  Integrity changes detected
+3  Baseline missing
+4  Baseline target mismatch
+5  Operation failed
+
+============================================================
+6) OUTPUT LOCATIONS
+============================================================
+Sentinel-C writes under project root:
+  sentinel-c-logs/data/.sentinel-baseline
+  sentinel-c-logs/logs/.sentinel-logs
+  sentinel-c-logs/reports/cli/scan_<timestamp>.txt
+  sentinel-c-logs/reports/html/scan_<timestamp>.html
+  sentinel-c-logs/reports/json/scan_<timestamp>.json
+  sentinel-c-logs/reports/csv/scan_<timestamp>.csv
+
+Terminal output prints absolute report paths.
+You can override the root log/report location by setting SENTINEL_ROOT.
+Reports include Nano Advisor sections:
+  - Risk level
+  - Summary
+  - Why this matters
+  - What matters now
+  - Teaching notes
+  - Suggested next steps
+
+Prompt mode keywords:
+  - banner (clears screen, then prints the banner)
+  - clear (clears the console)
+  - exit or Ctrl+C (leaves prompt mode)
+
+============================================================
+7) IMPORTANT CORNERS
+============================================================
+- Baseline is tied to the initialized target path.
+- Scanning a different path with existing baseline returns exit code 4.
+- Use --init --force to intentionally replace an existing baseline.
+- Use --json for machine parsing in CI/CD workflows.
+- Use --doctor before production monitoring if environment changed.
+- Use --hash-only when mtime-only drift is noisy in your environment.
+- Use --report-formats to emit only the report artifacts you need.
+
+============================================================
+8) COMMON OPERATIONAL FLOWS
+============================================================
+Flow A: First setup
+  sentinel-c --doctor
+  sentinel-c --init <path>
+  sentinel-c --status <path>
+
+Flow B: Incident triage
+  sentinel-c --status <path>
+  sentinel-c --scan <path>
+  sentinel-c --tail-log --lines 200
+
+Flow C: Approved change rollout
+  sentinel-c --verify <path> --reports
+  sentinel-c --update <path>
+  sentinel-c --status <path>
+
+============================================================
+9) AUTOMATED BUILD SCRIPTS
+============================================================
+Sentinel-C includes platform build scripts:
+  building-scripts/build-windows.ps1
+  building-scripts/build-linux.sh
+  building-scripts/build-macos.sh
+
+Windows (PowerShell):
+  powershell -ExecutionPolicy Bypass -File .\building-scripts\build-windows.ps1 -Configuration Release -Clean
+
+Linux:
+  bash building-scripts/build-linux.sh --build-type Release --clean
+
+macOS:
+  bash building-scripts/build-macos.sh --build-type Release --clean
+
+Script behavior:
+  - validates required tooling
+  - runs configure/build
+  - verifies binary exists
+  - copies binary to bin-releases/<platform>/

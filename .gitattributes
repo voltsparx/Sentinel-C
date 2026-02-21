@@ -1,0 +1,40 @@
+# Normalize text files by default.
+* text=auto eol=lf
+
+# Scripts
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# C/C++ and build files
+*.c text eol=lf
+*.cc text eol=lf
+*.cpp text eol=lf
+*.h text eol=lf
+*.hpp text eol=lf
+*.cmake text eol=lf
+CMakeLists.txt text eol=lf
+
+# Docs
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Binary assets and release artifacts
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.7z binary
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary

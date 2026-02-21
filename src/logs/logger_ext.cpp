@@ -1,4 +1,5 @@
 #include "../core/config.h"
+#include "../scanner/scanner.h"
 #include <fstream>
 #include <ctime>
 

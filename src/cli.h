@@ -1,4 +1,4 @@
 #pragma once
 namespace cli {
-void parse(int argc, char* argv[]);
+int parse(int argc, char* argv[]);
 }

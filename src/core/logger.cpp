@@ -1,43 +1,77 @@
 #include "logger.h"
 #include "config.h"
-#include <fstream>
-#include <iostream>
 #include <ctime>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <mutex>
+#include <sstream>
 
-static std::ofstream log_stream;
+namespace {
 
-static std::string timestamp() {
-    std::time_t t = std::time(nullptr);
-    char buf[32];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&t));
-    return buf;
+std::ofstream log_stream;
+std::mutex log_mutex;
+
+std::tm local_time(std::time_t t) {
+    std::tm tm{};
+#ifdef _WIN32
+    localtime_s(&tm, &t);
+#else
+    localtime_r(&t, &tm);
+#endif
+    return tm;
 }
 
-static std::string color(logger::Level lvl) {
-    if (!config::COLOR_OUTPUT) return "";
-    switch (lvl) {
-        case logger::Level::SUCCESS: return "\033[32m";
-        case logger::Level::WARNING: return "\033[33m";
-        case logger::Level::ERROR:   return "\033[31m";
-        default:                     return "\033[36m";
+std::string timestamp() {
+    const std::time_t t = std::time(nullptr);
+    const std::tm tm = local_time(t);
+    std::ostringstream out;
+    out << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
+    return out.str();
+}
+
+const char* level_label(logger::Level level) {
+    switch (level) {
+        case logger::Level::SUCCESS: return "SUCCESS";
+        case logger::Level::WARNING: return "WARN";
+        case logger::Level::ERROR: return "ERROR";
+        default: return "INFO";
     }
 }
+
+const char* color(logger::Level level) {
+    switch (level) {
+        case logger::Level::SUCCESS: return "\033[32m";
+        case logger::Level::WARNING: return "\033[33m";
+        case logger::Level::ERROR: return "\033[31m";
+        default: return "\033[36m";
+    }
+}
+
+} // namespace
 
 namespace logger {
 
 void init() {
-    log_stream.open(config::LOG_FILE, std::ios::app);
+    std::lock_guard<std::mutex> guard(log_mutex);
+    if (!log_stream.is_open()) {
+        log_stream.open(config::LOG_FILE, std::ios::app);
+    }
 }
 
 void write(Level level, const std::string& message) {
-    std::string ts = timestamp();
-    std::string clr = color(level);
-    std::string reset = config::COLOR_OUTPUT ? "\033[0m" : "";
+    std::lock_guard<std::mutex> guard(log_mutex);
+    const std::string prefix =
+        "[" + timestamp() + "] [" + level_label(level) + "] ";
 
-    std::cout << clr << message << reset << "\n";
+    if (config::COLOR_OUTPUT) {
+        std::cout << color(level) << prefix << message << "\033[0m\n";
+    } else {
+        std::cout << prefix << message << "\n";
+    }
 
     if (log_stream.is_open()) {
-        log_stream << "[" << ts << "] " << message << "\n";
+        log_stream << prefix << message << "\n";
     }
 }
 

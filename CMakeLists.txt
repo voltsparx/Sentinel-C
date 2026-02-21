@@ -1,41 +1,44 @@
 cmake_minimum_required(VERSION 3.10)
+project(SentinelC VERSION 4.0 LANGUAGES CXX)
 
-# Detect the system and compiler
-if(NOT CMAKE_CXX_COMPILER)
-  if(MSVC OR MSVC_IDE)
-    message(STATUS "MSVC compiler detected")
-  elseif(CMAKE_GENERATOR MATCHES "Unix Makefiles")
-    message(STATUS "Unix Makefiles generator")
-  endif()
-endif()
-
-project(SentinelC VERSION 3.50 LANGUAGES CXX)
-
-# Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Source files
-file(GLOB_RECURSE SRC_FILES
-    "src/*.cpp"
-    "src/*/*.cpp"
+# Build only the modular implementation tree.
+set(SENTINEL_SOURCES
+    src/main.cpp
+    src/cli.cpp
+    src/commands/arg_parser.cpp
+    src/commands/common.cpp
+    src/commands/advisor.cpp
+    src/commands/scan_ops.cpp
+    src/commands/baseline_ops.cpp
+    src/commands/maintenance_ops.cpp
+    src/commands/prompt_console.cpp
+    src/commands/dispatcher.cpp
+    src/banner.cpp
+    src/core/fsutil.cpp
+    src/core/logger.cpp
+    src/core/summary.cpp
+    src/scanner/scanner.cpp
+    src/scanner/baseline.cpp
+    src/scanner/ignore.cpp
+    src/scanner/hash.cpp
+    src/reports/cli_report.cpp
+    src/reports/advice.cpp
+    src/reports/html_report.cpp
+    src/reports/json_report.cpp
+    src/reports/csv_report.cpp
 )
 
-# Include directories
-include_directories("src")
-include_directories("src/core")
-include_directories("src/scanner")
-include_directories("src/reports")
-include_directories("src/logs")
+add_executable(sentinel-c ${SENTINEL_SOURCES})
+target_include_directories(sentinel-c PRIVATE src)
+set_target_properties(sentinel-c PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
 
-# Set output directory for binary
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
-# Add executable
-add_executable(sentinel-c ${SRC_FILES})
-
-# Optional: enable warnings for better code quality
 if(MSVC)
     target_compile_options(sentinel-c PRIVATE /W4 /permissive-)
 else()
@@ -43,32 +46,3 @@ else()
 endif()
 
 message(STATUS "Sentinel-C v${PROJECT_VERSION} build configured.")
-message(STATUS "Binary output will be placed in: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
-
-# ============================================================================
-# BUILD INSTRUCTIONS FOR DIFFERENT PLATFORMS
-# ============================================================================
-# 
-# WINDOWS (with Visual Studio installed):
-#   mkdir build
-#   cd build
-#   cmake -G "Visual Studio 17 2022" ..
-#   cmake --build . --config Release
-#
-# WINDOWS (with MinGW):
-#   mkdir build
-#   cd build
-#   cmake -G "MinGW Makefiles" ..
-#   cmake --build .
-#
-# LINUX/macOS:
-#   mkdir build
-#   cd build
-#   cmake ..
-#   cmake --build .
-#
-# REQUIREMENTS:
-#   - CMake >= 3.10
-#   - C++17 compatible compiler (MSVC, GCC, or Clang)
-#   - On Windows: Visual Studio 2015+ OR MinGW installed
-# ============================================================================

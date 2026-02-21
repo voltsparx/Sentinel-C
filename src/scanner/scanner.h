@@ -15,8 +15,10 @@ struct ScanResult {
     FileMap deleted;
 };
 
-ScanResult run_scan(const std::string& target);
-bool load_baseline(FileMap& baseline);
-bool save_baseline(const FileMap& data);
+FileMap build_snapshot(const std::string& target, core::ScanStats* stats = nullptr);
+ScanResult compare(const FileMap& baseline, const FileMap& current);
+ScanResult compare(const FileMap& baseline, const FileMap& current, bool consider_mtime);
+bool load_baseline(FileMap& baseline, std::string* baseline_root = nullptr);
+bool save_baseline(const FileMap& data, const std::string& baseline_root);
 
 }
