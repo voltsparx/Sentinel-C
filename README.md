@@ -7,6 +7,10 @@ Sentinel-C is a local-first host integrity monitoring framework for defensive op
 It builds a trusted baseline, detects drift (new/modified/deleted files), and produces
 consistent CLI, HTML, and JSON evidence for both humans and automation.
 
+<p align="center">
+<img src="docs/images/sentinel-c-about-menu.png">
+</p>
+
 ## Core Capabilities
 
 - Baseline creation and strict baseline-target validation
