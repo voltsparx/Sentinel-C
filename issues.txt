@@ -1,0 +1,359 @@
+Here is a comprehensive analysis of all the C++ files you have provided, detailing problems, areas for improvement, and recommendations.
+
+**Note:** This analysis is based on the code snippets provided and may not cover every single line or interaction. The recommendations are intended to guide improvements towards more robust, secure, and maintainable software.
+
+### Overall Architectural & Design Problems (A-Z)
+
+*   **A. Absence of a Centralized Error Handling Strategy:** Error handling is inconsistent. Some functions return `ExitCode` enums, others return boolean success/failure, and some use global error strings (e.g., `scanner::baseline_last_error()`). This makes it difficult for callers to handle errors predictably and for the system to recover gracefully.
+*   **B. Brittle Command Dispatcher:** The `dispatch` function in `dispatcher.cpp` is a massive chain of `if`/`else` statements. This is difficult to maintain, test, and extend. Adding a new command requires modifying this central function and understanding all its existing branches.
+*   **C. Configuration is a Global God Object:** The `config` namespace appears to be a collection of global variables. This creates tight coupling, makes unit testing nearly impossible (due to shared, mutable state), and hides dependencies between components.
+*   **D. Deep Coupling and Lack of Abstraction:** Modules are deeply intertwined. For example, `scan_ops.cpp` directly includes and depends on numerous report generation headers (`cli_report.h`, `html_report.h`, etc.). This violates the Dependency Inversion Principle and makes the system rigid.
+*   **E. Exception-Unsafe Code:** Many functions, particularly those using raw pointers, complex logic, or async operations, are not exception-safe. A thrown exception can lead to resource leaks (file handles, memory) and inconsistent program state.
+*   **F. Global Mutable State:** The use of global variables (e.g., for logger state, error strings) makes the codebase inherently thread-unsafe. Any operation that reads or modifies these globals without synchronization can lead to data races and corruption.
+*   **G. Header Files are Missing from Analysis:** The analysis of `.h` files is speculative, as they were not provided. However, it's highly likely they contain class/function declarations and may suffer from missing header guards, circular dependencies, and exposing太多的 internal implementation details.
+*   **H. Inconsistent Style and Naming:** The codebase mixes `snake_case`, `camelCase`, and `PascalCase` without a clear convention. Variable names like `A`, `M`, `D` are cryptic and reduce readability.
+*   **I. Logic Duplication:** Core logic, such as timestamp generation (`fsutil::timestamp`, `logger::timestamp`, `now()` in `summary.cpp`), path normalization, and string manipulation, is duplicated across multiple files, increasing maintenance costs.
+*   **J. "Magic" Numbers and Strings:** Hardcoded values (e.g., `5` and `10` in risk calculation, `64*1024` buffer size) and command names (e.g., `"--init"`) are scattered throughout the code. These should be defined as named constants.
+*   **K. No Clear Separation of Concerns:** Functions like `handle_doctor` in `maintenance_ops.cpp` perform argument parsing, business logic (health checks), and output formatting (both human-readable and JSON) all in one place.
+*   **L. Over-reliance on `std::filesystem` without Error Handling:** Many `std::filesystem` calls are made without checking `std::error_code` or catching exceptions, leading to potential crashes on permission errors or missing files.
+*   **M. Premature Optimization with Complex Async:** The use of `std::async` for report generation in `scan_ops.cpp` adds significant complexity (managing futures, exceptions) for a questionable performance gain, especially for small to medium-sized reports.
+*   **N. Query Injection Risk (Baseline Ops):** The `handle_show_baseline` function performs a substring search (`item.first.find(query_path)`) on user-provided input. This is inefficient and could be abused for information gathering if the query is crafted to enumerate paths.
+*   **O. Resource Leaks (Potential):** While modern C++ mitigates many leaks, patterns like creating temporary files without RAII wrappers or not joining detached threads can still lead to resource exhaustion.
+*   **P. Security Theater:** Functions like `security.cpp`'s `baseline_integrity_ok` provide a false sense of security by only checking for file existence, not its actual integrity.
+*   **Q. Tight Coupling with Output Streams:** Many functions write directly to `std::cout` or `std::cerr`. This makes it impossible to redirect output for logging or UI integration without modifying the functions themselves.
+*   **R. Unbounded Resource Consumption:** Functions like `scanner::build_snapshot` store all file metadata in a `std::vector` before processing, which can exhaust memory on very large file systems. The `tail-log` function reads the entire log file into memory.
+*   **S. Vector of Pointers without Ownership Semantics:** Using `std::vector<const core::FileEntry*>` is common but requires careful management to ensure the pointers remain valid and do not outlive the owning container.
+*   **T. Wildcard Matching Reinvented:** The custom `wildcard_match` function in `ignore.cpp` is complex, buggy, and unnecessary. Standard, well-tested libraries for glob matching should be used instead.
+*   **X. Cross-Platform Issues (Windows):** While some `#ifdef _WIN32` exist, many areas (ANSI color support, signal handling, permission checking) are not fully portable and may behave incorrectly or crash on Windows.
+*   **Y. YAGNI Violations:** Features like multiple report formats (CLI, HTML, JSON, CSV) and a complex prompt mode add significant complexity. It's worth considering if all of them are strictly necessary for the core value proposition.
+*   **Z. Zero Documentation:** The code has very few comments explaining the "why" behind complex logic, data structures, or non-obvious algorithms.
+
+### Detailed File-by-File Problem Analysis
+
+#### `advice.cpp`
+
+*   **Problems:**
+    *   **Hardcoded, Generic Messages:** All advice strings are hardcoded, offering no specific, actionable guidance based on which files changed or the system's context.
+    *   **Arbitrary Risk Calculation:** The risk level ("high", "medium") is based on arbitrary thresholds (e.g., 5 modified files) that are not configurable and do not consider the criticality of the changed files.
+    *   **No Prioritization:** All advice is presented equally. A change to a kernel module should have higher priority than a change to a temporary log file.
+    *   **Inconsistent Terminology:** Uses "clean" in `advisor_status` but "low" risk in `advisor_narrative` for the same scenario.
+    *   **Tight Coupling:** Directly depends on `scanner::ScanResult`.
+*   **Upgrades & Advice:**
+    *   Redesign the advice system to be data-driven. Load advice templates and rules from a configuration file.
+    *   Implement a risk-scoring engine that considers file path, file type, system role, and historical data.
+    *   Prioritize advice, showing the most critical recommendations first.
+    *   Pass a context object to advice functions, containing not just the scan result but also system information and user preferences.
+
+#### `arg_parser.cpp` (Not Provided, but referenced)
+
+*   **Inferred Problems:**
+    *   Likely couples parsing logic directly with command structures.
+    *   May not handle complex quoting or escaping robustly.
+    *   Error messages may be generic and unhelpful.
+*   **Upgrades & Advice:**
+    *   Use a robust, third-party argument parsing library (e.g., CLI11, Boost.Program_options).
+    *   If a custom parser is necessary, make it a pure function that returns a well-defined `ParseResult` struct, separate from command logic.
+
+#### `banner.cpp`
+
+*   **Problems:**
+    *   **Hardcoded ANSI Codes:** Relies on ANSI escape sequences without checking terminal capabilities, leading to garbage output on Windows or in non-interactive environments.
+    *   **Tight Coupling:** Directly uses `config::` globals.
+    *   **No Windows Support:** Lacks the necessary Windows API calls to enable VT processing.
+    *   **Inefficient Output:** Uses multiple `<<` operators.
+*   **Upgrades & Advice:**
+    *   Create a simple terminal abstraction to check for color support and provide colorized strings.
+    *   Use platform-specific code (`#ifdef _WIN32`) to enable ANSI support on Windows consoles.
+    *   Build the banner string in a `std::ostringstream` first, then output it once.
+
+#### `baseline_ops.cpp`
+
+*   **Problems:**
+    *   **Path Traversal:** No validation of `destination` or `source` paths in export/import commands.
+    *   **Insecure Backup:** Creates a `.bak` file with default permissions, potentially exposing sensitive data.
+    *   **TOCTOU Vulnerabilities:** Race conditions between checking for file existence and performing copy/import operations.
+    *   **Brittle JSON Output:** Manual JSON construction is error-prone and difficult to maintain.
+    *   **Incomplete Validation:** Import validates that a baseline *can* be loaded, but doesn't fully validate the content or integrity of the imported file.
+*   **Upgrades & Advice:**
+    *   Sanitize and validate all user-provided paths, ensuring they are within an allowed "safe" directory.
+    *   Set restrictive permissions (e.g., `0600` on Unix) on all created baseline and backup files.
+    *   Use atomic operations where possible (e.g., write to a temp file and then rename).
+    *   Use a proper JSON library for output. Add a `--pretty` flag for human-readable JSON.
+    *   After import, run a full integrity check on the new baseline file and its seal.
+
+#### `cli.cpp`
+
+*   **Problems:**
+    *   **Single Responsibility Violation:** The `parse` function does argument counting, error printing, config setting, directory creation, logger init, and command dispatching.
+    *   **Hidden Dependencies:** Depends on many other modules, making it impossible to test in isolation.
+    *   **Late Initialization:** Creates directories and initializes the logger *after* processing some arguments but before dispatching. If the output root is invalid, directories have already been created in the wrong place.
+*   **Upgrades & Advice:**
+    *   Refactor `parse` to only parse arguments and return a `CliOptions` struct.
+    *   Move side effects (like `fsutil::ensure_dirs`, `logger::init`) to the `main` function, which can then call the dispatcher based on the parsed options.
+    *   Validate the output root path before creating any directories.
+
+#### `cli_report.cpp`
+
+*   **Problems:**
+    *   **Path Traversal:** The `scan_id` is used directly in the filename without validation, allowing directory traversal attacks.
+    *   **Information Leakage:** No permission checks on report files.
+    *   **Silent Failure:** Returns an empty string on error, with no way for the caller to know why.
+    *   **Inconsistent Status:** Converts "changes_detected" to "CHANGES_DETECTED" but leaves "clean" as "CLEAN".
+    *   **Missing Context:** The change table shows MTIME but doesn't indicate if it was used in the comparison.
+*   **Upgrades & Advice:**
+    *   Sanitize the `scan_id` to only allow safe characters (alphanumeric, underscore, hyphen).
+    *   Set restrictive permissions on the created report file.
+    *   Return a `std::optional<std::string>` or a `Result` type that can indicate the reason for failure.
+    *   Add a column to the table indicating the reason for the change (hash, size, mtime).
+
+#### `common.cpp` (commands/common.h)
+
+*   **Problems:**
+    *   **Path Traversal in `normalize_path`:** Falls back to `lexically_normal()` on error, which doesn't resolve symlinks or remove all `..` components securely.
+    *   **Incomplete JSON Escaping:** `json_escape` misses several required escape sequences.
+    *   **TOCTOU in `is_directory_path`:** The file system state can change between `exists` and `is_directory`.
+    *   **ANSI Color Assumptions:** `colorize` assumes ANSI support without checking.
+*   **Upgrades & Advice:**
+    *   Make `normalize_path` return a `std::optional<fs::path>` and have the caller handle failure.
+    *   Use a well-tested JSON library for escaping.
+    *   For `is_directory_path`, use a single `fs::status` call and check the returned file type.
+    *   Integrate the color-checking logic from `banner.cpp` into a central utility.
+
+#### `csv_report.cpp`
+
+*   **Problems:**
+    *   **Path Traversal:** Same as `cli_report.cpp`.
+    *   **Incomplete CSV Escaping:** The custom `escape_csv` function may not handle all edge cases required by the CSV standard (e.g., leading/trailing spaces, Unicode).
+    *   **Empty Fields Cause Ambiguity:** An empty string for MTIME could mean "no mtime" or "failed to read".
+    *   **No Header Validation:** Doesn't ensure the CSV can be parsed by standard tools.
+*   **Upgrades & Advice:**
+    *   Same path sanitization advice as `cli_report.cpp`.
+    *   Use a robust CSV library for generation.
+    *   Use a sentinel value like "N/A" for missing data, clearly documented.
+    *   Add a Byte Order Mark (BOM) for better compatibility with Excel on Windows.
+
+#### `database.cpp`
+
+*   **Problems:**
+    *   **Path Traversal:** Baseline file paths are used as-is, allowing malicious entries like `../../../etc/passwd`.
+    *   **No Input Validation:** Blindly trusts baseline file content, crashing on invalid numbers or hashes.
+    *   **Un-escaped Separator:** Uses '|' as a separator but does not escape it if it appears in a filename.
+    *   **Insecure File Permissions:** No control over file permissions.
+    *   **No Integrity Verification:** No checksum to verify the baseline file itself hasn't been corrupted.
+    *   **Concurrency Issues:** No file locking, leading to corruption if multiple processes write simultaneously.
+*   **Upgrades & Advice:**
+    *   Validate all paths read from the baseline. Reject any that are not within the expected root or contain suspicious patterns.
+    *   Use a more robust serialization format (e.g., JSON, SQLite) that handles special characters automatically.
+    *   Set restrictive file permissions on baseline and seal files.
+    *   Calculate and store a checksum (hash) of the baseline file itself as part of the seal.
+    *   Implement file locking (e.g., `flock` on Linux, `LockFileEx` on Windows) for write operations.
+
+#### `dispatcher.cpp`
+
+*   **Problems:**
+    *   **Massive, Unmaintainable Function:** A 20+ branch `if`/`else` chain that violates the Single Responsibility Principle.
+    *   **Repetitive Validation:** The same validation pattern is copy-pasted for every command.
+    *   **Magic Strings:** All command names and options are hardcoded strings.
+    *   **Brittle Ordering:** Commands must be checked in a specific order (e.g., `--help` before `--init`).
+*   **Upgrades & Advice:**
+    *   **Redesign with a Command Registry:** Create a central registry that maps command names to `Command` objects. Each `Command` object knows its name, aliases, allowed options, and has an `execute` method.
+    *   The `dispatch` function then becomes a simple lookup in the registry.
+    *   This makes adding new commands trivial, improves testability, and allows for auto-generating help text.
+
+#### `fsutil.cpp`
+
+*   **Problems:**
+    *   **Silent Failures:** Uses a single `std::error_code` for multiple operations, discarding all but the last error. No checking or reporting of failures.
+    *   **No Permission Setting:** Creates directories with default, potentially insecure permissions.
+    *   **TOCTOU Vulnerabilities:** No protection against symlink attacks.
+    *   **Thread Safety:** The `timestamp` function is not thread-safe due to the use of a local static buffer (implicitly) or potential issues with `localtime_r`/`localtime_s`.
+*   **Upgrades & Advice:**
+    *   In `ensure_dirs`, check the `ec` after each `create_directories` call and log a warning or return a failure code.
+    *   Set explicit, restrictive permissions on created directories.
+    *   Consider using a more robust method for timestamp generation that is explicitly thread-safe.
+
+#### `hash.cpp`
+
+*   **Problems:**
+    *   **Critical Padding Bug:** In the `finalize` function, the code writes the padding byte (`0x80`) without checking if the buffer is full, leading to a buffer overflow.
+    *   **Memory Safety Issues:** No bounds checking in `process_block`.
+    *   **Integer Overflow:** No check for overflow in `total_bytes` for extremely large files.
+*   **Upgrades & Advice:**
+    *   **Fix the padding logic:** Ensure there is space in the buffer before writing `0x80`. If the buffer is full, process it first, then add the padding.
+    *   Add assertions or checks to `process_block` to ensure the input block is always 64 bytes.
+    *   Consider using a well-audited, third-party cryptography library (e.g., OpenSSL, Crypto++) instead of a custom implementation, as cryptography is notoriously difficult to get right.
+
+#### `html_report.cpp`
+
+*   **Problems:**
+    *   **Path Traversal:** Same as `cli_report.cpp`.
+    *   **XSS Risk:** While `escape_html` is used, any missed call would create a severe XSS vulnerability.
+    *   **Hardcoded, Massive CSS:** The entire CSS style is embedded as a string literal, making it difficult to maintain or theme.
+    *   **Inline JavaScript:** The theme switching script is inline, preventing the use of a Content Security Policy (CSP) and making it harder to debug.
+    *   **Accessibility Issues:** The HTML may have poor contrast, missing ARIA labels, and other accessibility problems.
+*   **Upgrades & Advice:**
+    *   Same path sanitization advice as `cli_report.cpp`.
+    *   **Audit all HTML output:** Ensure every single piece of user-controlled data is passed through `escape_html`.
+    *   Move the CSS to a separate, loadable file. This makes it easier to maintain and allows users to create custom themes.
+    *   Move the JavaScript to a separate file and implement a strong Content Security Policy.
+    *   Run the generated HTML through an accessibility checker and fix violations.
+
+#### `ignore.cpp`
+
+*   **Problems:**
+    *   **Broken Case-Insensitivity:** Normalizing paths to lowercase breaks on case-sensitive file systems (Linux).
+    *   **Faulty Wildcard Logic:** The custom `wildcard_match` function has numerous bugs and does not correctly implement standard globbing semantics (`*`, `?`, `**`, character classes, negation).
+    *   **Global Mutable State:** The `rules` vector is global, making the system thread-unsafe and preventing multiple independent ignore rule sets.
+    *   **Inefficient Matching:** Each `match` call iterates through all rules linearly.
+*   **Upgrades & Advice:**
+    *   **Remove the custom implementation.** This is the single most important fix for this module.
+    *   Use a standard, well-tested library for pattern matching. On POSIX systems, consider `fnmatch`. On Windows, `PathMatchSpec`. For a cross-platform solution, integrate a small, header-only glob library.
+    *   Do not modify the case of the path. Pattern matching should be case-sensitive by default, with an option for case-insensitivity.
+    *   Make the ignore system a class that holds its own rules, allowing for multiple instances.
+
+#### `json_report.cpp`
+
+*   **Problems:**
+    *   **Path Traversal:** Same as `cli_report.cpp`.
+    *   **Incomplete Escaping:** The `escape_json` function misses crucial escapes (Unicode, forward slash).
+    *   **Loss of Metadata:** The JSON output only contains file paths, not their hashes, sizes, or modification times, rendering it nearly useless for analysis.
+    *   **Brittle Trailing Comma Logic:** The manual handling of commas makes the code fragile.
+    *   **No JSON Schema:** No versioning or schema definition, making it hard for other tools to parse reliably.
+*   **Upgrades & Advice:**
+    *   Same path sanitization advice as `cli_report.cpp`.
+    *   **Use a proper JSON library.** This will handle all escaping, formatting, and data structure complexities correctly.
+    *   **Include all relevant metadata** for added, modified, and deleted files.
+    *   Define and document a JSON schema for the report output.
+
+#### `logger.cpp`
+
+*   **Problems:**
+    *   **Global State:** Global `log_stream` and `mutex` lead to static initialization order fiasco and thread-safety issues.
+    *   **Mutex Not Protecting All Operations:** `init` and `reopen` are not fully protected, leading to potential races.
+    *   **Deadlock Potential:** A log call from within a log call (e.g., in a custom `operator<<`) would deadlock.
+    *   **No Log Rotation:** The log file grows indefinitely.
+    *   **Hardcoded ANSI Colors:** Assumes terminal support without checking.
+    *   **Inconsistent Timestamp:** No milliseconds or timezone, making logs hard to correlate.
+*   **Upgrades & Advice:**
+    *   Make the logger a singleton with Meyers' Initialization to avoid static initialization issues.
+    *   Use a `std::recursive_mutex` if there's a risk of nested log calls.
+    *   Implement log rotation (by size or date).
+    *   Integrate the terminal color check from `banner.cpp`.
+    *   Use a more precise timestamp with milliseconds and timezone offset (e.g., ISO 8601).
+
+#### `maintenance_ops.cpp`
+
+*   **Problems:**
+    *   **Insecure Temporary Files:** Creates predictable temp file names, vulnerable to symlink attacks.
+    *   **TOCTOU Vulnerabilities:** Race conditions in `handle_purge_reports` and `handle_report_index`.
+    *   **Information Leakage:** Error messages and report indices can reveal system structure.
+    *   **Incomplete Report Cleanup:** No verification that files were actually removed.
+    *   **Platform-Specific Permission Checks:** The `others_writable` check is only implemented for non-Windows, leaving a gap on Windows.
+    *   **Code Duplication:** `handle_doctor` and `handle_guard` share significant logic.
+*   **Upgrades & Advice:**
+    *   Use secure temporary file creation functions (e.g., `mkstemp` on Linux, `GetTempFileName` on Windows).
+    *   After a deletion, check for success and log a warning if the file still exists.
+    *   Implement the permission check for Windows using its security APIs (ACLs).
+    *   Factor out the common health check logic into a separate module that can be used by both `doctor` and `guard`.
+
+#### `prompt_console.cpp`
+
+*   **Problems:**
+    *   **Command Injection:** Uses `std::system("cls")` / `std::system("clear")` with environment-influenced commands.
+    *   **No Input Sanitization:** User input is tokenized but not validated for malicious content.
+    *   **Path Traversal:** `set target` and `set destination` do not validate paths.
+    *   **Signal Handler Issues:** The signal handler is mostly safe, but terminal state is not restored if a signal arrives during a prompt.
+    *   **Complex Tokenization:** A custom, likely buggy, tokenizer is implemented instead of using a standard one.
+*   **Upgrades & Advice:**
+    *   **Eliminate `std::system` calls.** Use platform-specific console functions (e.g., `SetConsoleCursorPosition`, `write`) or ANSI escape sequences directly for clearing the screen.
+    *   Sanitize all user input. For paths, resolve them and ensure they are within an allowed base directory.
+    *   Use a signal handler that merely sets a flag and relies on the main loop to check it and clean up.
+    *   Use a standard library for tokenization, or at the very least, make the custom tokenizer robust and well-tested.
+
+#### `scanner.cpp`
+
+*   **Problems:**
+    *   **Global Mutable State:** Uses global error/warning strings from `scanner` namespace, making it thread-unsafe.
+    *   **Memory Explosion:** Stores all pending files in a `std::vector` before processing.
+    *   **Race Conditions in Time Conversion:** The two `now()` calls in `to_time_t` are not atomic.
+    *   **Broken Relative Path Calculation:** The fallback logic when `fs::relative` fails is incorrect.
+    *   **No Progress Indication:** No feedback during long scans.
+    *   **Symlink Handling is Missing:** Simply skips symlinks without any configurable behavior.
+*   **Upgrades & Advice:**
+    *   Remove global error state. Have functions return a `Result` type that contains either the desired data or an error.
+    *   Process files in a streaming fashion as they are discovered, rather than storing them all first. Use a producer-consumer queue for threading.
+    *   Use a monotonic clock for duration calculation and convert timestamps at the point of comparison using a consistent, atomic method.
+    *   Provide a correct fallback for relative paths, or fail and report the error.
+    *   Add a callback mechanism to report progress during long scans, which the UI can use to update a spinner or progress bar.
+    *   Make symlink handling configurable (follow, ignore, report as error).
+
+#### `scan_ops.cpp`
+
+*   **Problems:**
+    *   **Path Traversal in Error Messages:** Echoes user-provided path back in error logs.
+    *   **TOCTOU in Directory Check:** Race between checking the directory and using it.
+    *   **Future Abandonment:** Futures from `std::async` can block on destruction if not handled carefully.
+    *   **No Thread Pool Limits:** Can spawn unlimited threads.
+    *   **Exception Safety in Async Code:** Catches exceptions but doesn't propagate them, hiding failures.
+    *   **Broken Report Selection Logic:** The parsing of `--report-formats` is flawed and produces unpredictable results for lists like "all,none".
+    *   **Inconsistent Exit Codes:** Different failure modes return different exit codes in an inconsistent manner.
+*   **Upgrades & Advice:**
+    *   Log errors without including the raw, unvalidated user input.
+    *   Store the resolved, canonical path after the check and use that for all subsequent operations.
+    *   Either wait for all futures immediately after launching them, or detach them and manage them in a more controlled way. The current approach of storing them in `std::optional` and calling `get()` later is acceptable but must be exception-safe.
+    *   Re-consider the need for async report generation. If kept, use a thread pool with a limited number of threads.
+    *   Fix the report selection logic. The parser should process the list deterministically, with later entries potentially overriding earlier ones (e.g., "all,cli" might mean just "cli").
+    *   Define a clear, documented mapping of error conditions to exit codes and adhere to it strictly.
+
+#### `security.cpp`
+
+*   **Problems:**
+    *   **False Sense of Security:** The function `baseline_integrity_ok` only checks if a file exists and has a non-zero size. It provides no actual integrity verification.
+    *   **TOCTOU Race Condition:** The check is vulnerable to a race condition.
+    *   **No Symlink Protection:** Does not check if the file is a symlink.
+*   **Upgrades & Advice:**
+    *   Either remove this function or rename it to something more accurate like `baseline_file_exists`.
+    *   Implement a proper integrity check that verifies the baseline's hash against its seal, checks file permissions, and ensures it's not a symlink.
+
+#### `summary.cpp`
+
+*   **Problems:**
+    *   **Information Leakage:** Prints full report paths to the console.
+    *   **Hardcoded Separator:** Fixed-width separator may not align with terminal width.
+    *   **No Color Support:** Doesn't use color to highlight success/error states, unlike other parts of the code.
+    *   **Misleading Success Message:** Always prints "Scan completed successfully", even if errors occurred.
+    *   **Code Duplication:** Contains its own `now()` function instead of using `fsutil::timestamp()`.
+*   **Upgrades & Advice:**
+    *   Consider printing only filenames (not full paths) or providing a `--quiet` flag for scripts.
+    *   Detect terminal width and adjust the separator accordingly.
+    *   Integrate the color support from `banner.cpp`.
+    *   Base the "success" message on the actual exit code of the scan, not just on the fact that the function was called.
+    *   Remove the duplicate `now()` function.
+
+#### `utils.cpp`
+
+*   **Problems:**
+    *   **No Color Support Checking:** Assumes ANSI colors without checking terminal capabilities.
+    *   **No Thread Safety:** The `spinner_animation` function is not thread-safe and modifies console state without locking.
+    *   **Spinner Blocks the Thread:** The spinner runs in a blocking loop, preventing any other work from being done.
+    *   **No Windows Support:** ANSI codes will not work on legacy Windows consoles.
+*   **Upgrades & Advice:**
+    *   Integrate the terminal color check from `banner.cpp`.
+    *   The spinner should be redesigned. A better pattern is to have a separate thread that updates a progress variable, and the main thread periodically checks and prints the spinner. The provided implementation is fundamentally flawed for any real-world use.
+    *   Add Windows support by enabling VT processing or using console API functions.
+
+### Analysis of Header Files (`.h`) - General Issues (as code was not provided)
+
+*   **A. Missing Include Guards:** Most headers likely lack `#pragma once` or proper `#ifndef` guards, leading to multiple definition errors.
+*   **B. Exposing Internal Implementation:** Headers may be including other headers and declaring types that are only meant for internal use within a `.cpp` file, increasing compilation times and coupling.
+*   **C. Lack of Documentation:** Public interfaces (functions, classes) are probably not documented, making it hard for other developers to use them correctly.
+*   **D. Inline Function Complexity:** Complex functions might be defined as `inline` in the header, bloating the binary and slowing down compilation.
+*   **E. Circular Dependencies:** Without seeing the headers, it's highly probable that there are circular dependencies between modules (e.g., `core/config.h` included everywhere).
+*   **F. Using Directives in Headers:** The use of `using namespace fs = std::filesystem;` might be present in headers, forcing this alias on all includers.
+
+**General Advice for Headers:**
+*   Always use `#pragma once` or traditional include guards.
+*   Keep headers focused. They should declare only the public interface of a module.
+*   Forward declare what you can, include what you need in the `.cpp` file.
+*   Document all public functions, classes, and constants with clear comments.
+*   Avoid `using namespace` directives in the global scope of a header file.

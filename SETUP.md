@@ -1,4 +1,4 @@
-# Sentinel-C v4.0 - Build & Setup Guide
+# Sentinel-C v4.5 - Build & Setup Guide
 
 ## ⚠️ Requirements
 
@@ -231,7 +231,7 @@ After building, verify the executable works:
 
 Expected output:
 ```
-Sentinel-C v4.0
+Sentinel-C v4.5
 
 --init <path>           Initialize baseline
 --scan <path>           Scan and report changes (CLI/HTML/JSON/CSV)
@@ -249,6 +249,8 @@ Sentinel-C v4.0
 --tail-log              Tail Sentinel-C log output
 --report-index          List report artifacts (supports JSON output)
 --prompt-mode           Guided interactive console mode
+--set-destination       Save destination root for future runs
+--show-destination      Show active and saved destination settings
 --version               Show version metadata
 --about                 Show trust-focused tool overview
 --explain               Explain major flags with examples
@@ -258,6 +260,7 @@ Sentinel-C v4.0
 Output destination:
 - Default runtime storage path is alongside the built binary (`<binary-dir>/sentinel-c-logs`).
 - You can override per command using `--output-root <path>`.
+- You can persist destination using `--set-destination <path>`.
 - Logs/reports are written with timestamped meaningful filenames.
 
 ---

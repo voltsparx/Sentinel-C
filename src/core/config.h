@@ -24,7 +24,7 @@
 namespace config {
 
 inline const std::string TOOL_NAME = "Sentinel-C";
-inline const std::string VERSION = "v4.0";
+inline const std::string VERSION = "v4.5";
 inline const std::string CODENAME = "AEGIS";
 
 namespace fs = std::filesystem;

@@ -1,14 +1,22 @@
 #include "hash.h"
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <limits>
+#include <optional>
 #include <sstream>
 
 namespace hash {
 
 namespace {
+
+constexpr const char* EMPTY_FILE_SHA256 =
+    "e3b0c44298fc1c149afbf4c8996fb924"
+    "27ae41e4649b934ca495991b7852b855";
 
 constexpr std::uint32_t K[64] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
@@ -155,6 +163,60 @@ std::string finalize(Sha256Context& ctx) {
     return out.str();
 }
 
+std::string sha256_stream(std::ifstream& file,
+                          const std::optional<uintmax_t>& expected_size) {
+    if (expected_size.has_value() && *expected_size == 0) {
+        return EMPTY_FILE_SHA256;
+    }
+
+    Sha256Context ctx;
+    std::array<char, 64 * 1024> chunk{};
+    std::uintmax_t remaining =
+        expected_size.value_or(std::numeric_limits<std::uintmax_t>::max());
+
+    while (file) {
+        if (expected_size.has_value() && remaining == 0) {
+            break;
+        }
+
+        const std::size_t request_size = expected_size.has_value()
+            ? static_cast<std::size_t>(
+                  std::min<std::uintmax_t>(chunk.size(), remaining))
+            : chunk.size();
+
+        file.read(chunk.data(), static_cast<std::streamsize>(request_size));
+        const std::streamsize read_bytes = file.gcount();
+        if (read_bytes <= 0) {
+            break;
+        }
+
+        update(ctx,
+               reinterpret_cast<const std::uint8_t*>(chunk.data()),
+               static_cast<std::size_t>(read_bytes));
+
+        if (expected_size.has_value()) {
+            remaining -= static_cast<std::uintmax_t>(read_bytes);
+        }
+    }
+
+    if (expected_size.has_value() && remaining != 0) {
+        return "";
+    }
+    if (file.bad()) {
+        return "";
+    }
+    return finalize(ctx);
+}
+
+std::optional<uintmax_t> detect_expected_size(const std::string& path) {
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(path, ec);
+    if (ec) {
+        return std::nullopt;
+    }
+    return size;
+}
+
 } // namespace
 
 std::string sha256_file(const std::string& path) {
@@ -162,19 +224,15 @@ std::string sha256_file(const std::string& path) {
     if (!file.is_open()) {
         return "";
     }
+    return sha256_stream(file, detect_expected_size(path));
+}
 
-    Sha256Context ctx;
-    std::array<char, 64 * 1024> chunk{};
-    while (file.good()) {
-        file.read(chunk.data(), static_cast<std::streamsize>(chunk.size()));
-        const std::streamsize read_bytes = file.gcount();
-        if (read_bytes > 0) {
-            update(ctx, reinterpret_cast<const std::uint8_t*>(chunk.data()),
-                   static_cast<std::size_t>(read_bytes));
-        }
+std::string sha256_file(const std::string& path, uintmax_t expected_size) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file.is_open()) {
+        return "";
     }
-
-    return finalize(ctx);
+    return sha256_stream(file, expected_size);
 }
 
 } // namespace hash

@@ -107,6 +107,8 @@ void print_usage_lines() {
         << "  sentinel-c --watch <path> [--interval N] [--cycles N] [--reports] [--report-formats list] [--fail-fast] [--hash-only] [--quiet] [--no-advice] [--json] [--output-root <path>]\n"
         << "  sentinel-c --doctor [--fix] [--quiet] [--no-advice] [--json] [--output-root <path>]\n"
         << "  sentinel-c --guard [--fix] [--quiet] [--no-advice] [--json] [--output-root <path>]\n"
+        << "  sentinel-c --set-destination <path> [--json] [--quiet]\n"
+        << "  sentinel-c --show-destination [--json] [--quiet] [--output-root <path>]\n"
         << "  sentinel-c --list-baseline [--limit N] [--json] [--output-root <path>]\n"
         << "  sentinel-c --show-baseline <path> [--json] [--output-root <path>]\n"
         << "  sentinel-c --export-baseline <file> [--overwrite] [--output-root <path>]\n"
@@ -120,7 +122,8 @@ void print_usage_lines() {
         << "  sentinel-c --explain\n"
         << "  sentinel-c --help\n\n"
         << "Storage Default:\n"
-        << "  Logs and reports are stored under the binary directory by default.\n\n";
+        << "  Logs and reports are stored under the binary directory by default.\n"
+        << "  Use --set-destination <path> to save a persistent destination for future runs.\n\n";
 }
 
 void print_no_command_hint() {
@@ -179,7 +182,8 @@ void print_about() {
         << "  - exit   : leave prompt mode (Ctrl+C also exits)\n\n"
         << "Output destination:\n"
         << "  - Default: binary directory/sentinel-c-logs\n"
-        << "  - Override per command with --output-root <path>\n\n"
+        << "  - Override per command with --output-root <path>\n"
+        << "  - Save persistent destination with --set-destination <path>\n\n"
         << "Trust posture:\n"
         << "  - Runs locally and does not auto-upload data\n"
         << "  - Uses explicit commands for state-changing operations\n"
@@ -233,6 +237,8 @@ void print_explain() {
         << "    Sub-flags: --days <n>, --all, --dry-run\n"
         << "    Example: sentinel-c --purge-reports --days 30 --dry-run\n\n"
         << "Additional utility flags:\n"
+        << "  - --set-destination <path> [--json] [--quiet]\n"
+        << "  - --show-destination [--json] [--quiet]\n"
         << "  - --guard [--fix] [--quiet] [--no-advice] [--json]\n"
         << "  - --export-baseline <file> [--overwrite]\n"
         << "  - --import-baseline <file> [--force]\n"

@@ -3,6 +3,7 @@
 #include "../core/config.h"
 #include "../core/fsutil.h"
 #include "../core/logger.h"
+#include "../core/runtime_settings.h"
 #include "../scanner/hash.h"
 #include "../scanner/scanner.h"
 #include <algorithm>
@@ -152,6 +153,99 @@ bool others_writable(const std::string& path) {
 
 } // namespace
 
+ExitCode handle_set_destination(const ParsedArgs& parsed) {
+    std::string destination;
+    if (!require_single_positional(parsed, "<path>", destination)) {
+        return ExitCode::UsageError;
+    }
+
+    const bool as_json = has_switch(parsed, "json");
+    const bool quiet = has_switch(parsed, "quiet");
+
+    std::string error;
+    if (!config::set_output_root(destination, &error)) {
+        if (as_json) {
+            std::cout << "{\n"
+                      << "  \"command\": \"set-destination\",\n"
+                      << "  \"ok\": false,\n"
+                      << "  \"error\": \"" << json_escape(error) << "\"\n"
+                      << "}\n";
+        } else {
+            logger::error("Failed to set destination: " + error);
+        }
+        return ExitCode::UsageError;
+    }
+
+    fsutil::ensure_dirs();
+    logger::reopen();
+
+    if (!core::save_output_root(config::output_root(), &error)) {
+        if (as_json) {
+            std::cout << "{\n"
+                      << "  \"command\": \"set-destination\",\n"
+                      << "  \"ok\": false,\n"
+                      << "  \"error\": \"" << json_escape(error) << "\"\n"
+                      << "}\n";
+        } else {
+            logger::error("Destination applied but failed to persist: " + error);
+        }
+        return ExitCode::OperationFailed;
+    }
+
+    if (as_json) {
+        std::cout << "{\n"
+                  << "  \"command\": \"set-destination\",\n"
+                  << "  \"ok\": true,\n"
+                  << "  \"output_root\": \"" << json_escape(config::output_root()) << "\",\n"
+                  << "  \"settings_file\": \"" << json_escape(core::settings_file_path()) << "\"\n"
+                  << "}\n";
+    } else if (!quiet) {
+        logger::success("Destination saved.");
+        logger::info("Output root: " + config::output_root());
+        logger::info("Settings file: " + core::settings_file_path());
+    }
+    return ExitCode::Ok;
+}
+
+ExitCode handle_show_destination(const ParsedArgs& parsed) {
+    if (!reject_positionals(parsed)) {
+        return ExitCode::UsageError;
+    }
+
+    const bool as_json = has_switch(parsed, "json");
+    const bool quiet = has_switch(parsed, "quiet");
+    std::string load_error;
+    const auto saved = core::load_saved_output_root(&load_error);
+
+    if (as_json) {
+        std::cout << "{\n"
+                  << "  \"command\": \"show-destination\",\n"
+                  << "  \"active_output_root\": \"" << json_escape(config::output_root()) << "\",\n"
+                  << "  \"settings_file\": \"" << json_escape(core::settings_file_path()) << "\",\n";
+        if (!load_error.empty()) {
+            std::cout << "  \"warning\": \"" << json_escape(load_error) << "\",\n";
+        }
+        if (saved.has_value()) {
+            std::cout << "  \"saved_output_root\": \"" << json_escape(*saved) << "\"\n";
+        } else {
+            std::cout << "  \"saved_output_root\": null\n";
+        }
+        std::cout << "}\n";
+        return ExitCode::Ok;
+    }
+
+    if (!quiet) {
+        std::cout << "Destination Settings\n"
+                  << "  active output root : " << config::output_root() << "\n"
+                  << "  settings file      : " << core::settings_file_path() << "\n"
+                  << "  saved output root  : " << (saved.has_value() ? *saved : "(not set)") << "\n";
+    }
+    if (!load_error.empty()) {
+        logger::warning("Settings warning: " + load_error);
+    }
+    return ExitCode::Ok;
+}
+
 ExitCode handle_purge_reports(const ParsedArgs& parsed) {
     if (!reject_positionals(parsed)) {
         return ExitCode::UsageError;
@@ -189,6 +283,7 @@ ExitCode handle_purge_reports(const ParsedArgs& parsed) {
 
         for (const auto& entry : fs::directory_iterator(dir, ec)) {
             if (ec || !entry.is_regular_file()) {
+                ec.clear();
                 continue;
             }
 
@@ -209,6 +304,8 @@ ExitCode handle_purge_reports(const ParsedArgs& parsed) {
                 fs::remove(entry.path(), ec);
                 if (!ec) {
                     ++removed;
+                } else {
+                    ec.clear();
                 }
             }
         }
@@ -600,12 +697,17 @@ ExitCode handle_report_index(const ParsedArgs& parsed) {
     std::error_code ec;
     for (const std::string& item_type : types) {
         const std::string dir = report_dir_for_type(item_type);
-        if (dir.empty() || !fs::exists(dir, ec)) {
+        if (dir.empty()) {
+            continue;
+        }
+        if (!fs::exists(dir, ec)) {
+            ec.clear();
             continue;
         }
 
         for (const auto& entry : fs::directory_iterator(dir, ec)) {
             if (ec || !entry.is_regular_file()) {
+                ec.clear();
                 continue;
             }
 

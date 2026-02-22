@@ -1,4 +1,4 @@
-Sentinel-C v4.0 - Usage Guide
+Sentinel-C v4.5 - Usage Guide
 Author: voltsparx
 Contact: voltsparx@gmail.com
 
@@ -97,11 +97,13 @@ Release note:
 --tail-log [--lines <n>]
 --report-index [--type all|cli|html|json|csv] [--limit <n>] [--json]
 --prompt-mode [--target <path>] [--interval <sec>] [--cycles <n>] [--reports] [--report-formats <list>] [--strict] [--hash-only] [--quiet] [--no-advice]
+--set-destination <path> [--json] [--quiet]
+--show-destination [--json] [--quiet]
 --version [--json]
 --about
 --explain
 --help
---output-root <path> (supported by operational commands)
+--output-root <path> (one-run override for operational commands)
 
 ============================================================
 5) EXIT CODES
@@ -128,6 +130,7 @@ Sentinel-C writes under binary directory by default:
 Terminal output prints absolute report paths.
 You can override destination with:
   - command option: --output-root <path>
+  - persistent setting: --set-destination <path>
   - environment variable: SENTINEL_ROOT
 Reports include a guidance block with:
   - Risk level

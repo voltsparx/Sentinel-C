@@ -1,11 +1,11 @@
-# Sentinel-C v4.0
+# Sentinel-C v4.5
 
 Author: voltsparx  
 Contact: voltsparx@gmail.com
 
 Sentinel-C is a local-first host integrity monitoring framework for defensive operations.
 It builds a trusted baseline, detects drift (new/modified/deleted files), and produces
-consistent CLI, HTML, and JSON evidence for both humans and automation.
+consistent CLI, HTML, JSON, and CSV evidence for both humans and automation.
 
 <p align="center">
 <img src="docs/images/sentinel-c-about-menu.png">
@@ -100,11 +100,13 @@ Each script:
 - `--tail-log` (`--lines N`)
 - `--report-index` (`--type all|cli|html|json|csv`, `--limit N`, `--json`)
 - `--prompt-mode` (`--target`, `--interval`, `--cycles`, `--reports`, `--report-formats`, `--strict`, `--hash-only`, `--quiet`, `--no-advice`)
+- `--set-destination <path>` (persist report/log/baseline destination for future runs)
+- `--show-destination` (`--json`, `--quiet`)
 - `--version` (`--json`)
 - `--about`
 - `--explain`
 - `--help`
-- `--output-root <path>` (available on operational commands to set log/report/baseline destination)
+- `--output-root <path>` (one-run override on operational commands)
 
 Prompt-only keywords:
 - `banner` (clears screen, then prints banner)
@@ -123,8 +125,8 @@ Prompt-only keywords:
 ## Output Layout
 
 Sentinel-C writes into `sentinel-c-logs/` under the binary directory by default.
-You can override destination per command using `--output-root <path>`, or globally
-using `SENTINEL_ROOT`.
+You can override destination per command using `--output-root <path>`, persist it
+with `--set-destination <path>`, or set `SENTINEL_ROOT`.
 
 - `sentinel-c-logs/data/.sentinel-baseline`
 - `sentinel-c-logs/data/.sentinel-baseline.seal`

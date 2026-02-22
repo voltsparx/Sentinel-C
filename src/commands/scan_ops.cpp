@@ -29,6 +29,15 @@ struct ReportSelection {
     bool csv = true;
 };
 
+std::string normalize_compare_key(const std::string& path) {
+    std::string normalized = normalize_path(path);
+#ifdef _WIN32
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+#endif
+    return normalized;
+}
+
 bool any_enabled(const ReportSelection& selection) {
     return selection.cli || selection.html || selection.json || selection.csv;
 }
@@ -216,7 +225,8 @@ ExitCode compare_target(const std::string& target,
         return baseline_code;
     }
 
-    if (!baseline.root.empty() && baseline.root != target) {
+    if (!baseline.root.empty() &&
+        normalize_compare_key(baseline.root) != normalize_compare_key(target)) {
         if (!quiet) {
             logger::error("Baseline target mismatch.");
             logger::error("Baseline target: " + baseline.root);

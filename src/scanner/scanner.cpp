@@ -3,6 +3,7 @@
 #include "ignore.h"
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <mutex>
@@ -33,6 +34,52 @@ std::string normalize_path(const fs::path& path) {
         return canonical.generic_string();
     }
     return path.lexically_normal().generic_string();
+}
+
+std::string lower_path(std::string value) {
+    std::replace(value.begin(), value.end(), '\\', '/');
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return value;
+}
+
+#ifndef _WIN32
+bool starts_with(const std::string& text, const std::string& prefix) {
+    return text.rfind(prefix, 0) == 0;
+}
+#endif
+
+#ifdef _WIN32
+bool ends_with(const std::string& text, const std::string& suffix) {
+    return text.size() >= suffix.size() &&
+           text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+#endif
+
+bool should_skip_for_stability(const std::string& normalized_path) {
+    const std::string lowered = lower_path(normalized_path);
+
+#ifdef _WIN32
+    if (ends_with(lowered, "/pagefile.sys") ||
+        ends_with(lowered, "/hiberfil.sys") ||
+        ends_with(lowered, "/swapfile.sys")) {
+        return true;
+    }
+    if (lowered.find("/system volume information/") != std::string::npos ||
+        lowered.find("/$recycle.bin/") != std::string::npos) {
+        return true;
+    }
+#else
+    if (lowered == "/proc" || starts_with(lowered, "/proc/") ||
+        lowered == "/sys" || starts_with(lowered, "/sys/") ||
+        lowered == "/dev" || starts_with(lowered, "/dev/") ||
+        lowered == "/run" || starts_with(lowered, "/run/")) {
+        return true;
+    }
+#endif
+
+    return false;
 }
 
 struct PendingFile {
@@ -72,12 +119,21 @@ FileMap build_snapshot(const std::string& target, core::ScanStats* stats) {
         const fs::directory_entry entry = *it;
         it.increment(ec);
 
+        if (entry.is_symlink(ec)) {
+            ec.clear();
+            continue;
+        }
+
         if (!entry.is_regular_file(ec)) {
             ec.clear();
             continue;
         }
 
         const std::string path = normalize_path(entry.path());
+        if (should_skip_for_stability(path)) {
+            continue;
+        }
+
         std::error_code rel_ec;
         const fs::path rel = fs::relative(entry.path(), root_path, rel_ec);
         const std::string relative_path =
@@ -113,7 +169,7 @@ FileMap build_snapshot(const std::string& target, core::ScanStats* stats) {
                 entry.path = item.path;
                 entry.size = item.size;
                 entry.mtime = item.mtime;
-                entry.hash = hash::sha256_file(item.path);
+                entry.hash = hash::sha256_file(item.path, item.size);
                 if (entry.hash.empty()) {
                     continue;
                 }
@@ -138,7 +194,7 @@ FileMap build_snapshot(const std::string& target, core::ScanStats* stats) {
                         }
 
                         const PendingFile& item = pending[index];
-                        const std::string digest = hash::sha256_file(item.path);
+                        const std::string digest = hash::sha256_file(item.path, item.size);
                         if (digest.empty()) {
                             continue;
                         }

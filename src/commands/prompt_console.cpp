@@ -5,6 +5,7 @@
 #include "../core/config.h"
 #include "../core/fsutil.h"
 #include "../core/logger.h"
+#include "../core/runtime_settings.h"
 #include <algorithm>
 #include <atomic>
 #include <cctype>
@@ -59,6 +60,19 @@ std::string trim_copy(const std::string& value) {
     return value.substr(first, last - first + 1);
 }
 
+std::string join_tail_tokens(const std::vector<std::string>& tokens, std::size_t start_index) {
+    if (start_index >= tokens.size()) {
+        return "";
+    }
+
+    std::string joined = tokens[start_index];
+    for (std::size_t i = start_index + 1; i < tokens.size(); ++i) {
+        joined += " ";
+        joined += tokens[i];
+    }
+    return joined;
+}
+
 bool parse_on_off(const std::string& value, bool& out) {
     const std::string lowered = lower_copy(value);
     if (lowered == "on" || lowered == "true" || lowered == "1" || lowered == "yes") {
@@ -79,16 +93,16 @@ std::vector<std::string> tokenize(const std::string& line) {
     bool escape = false;
 
     for (const char ch : line) {
-        if (escape) {
-            current.push_back(ch);
-            escape = false;
-            continue;
-        }
-        if (ch == '\\') {
-            escape = true;
-            continue;
-        }
         if (quote != '\0') {
+            if (escape) {
+                current.push_back(ch);
+                escape = false;
+                continue;
+            }
+            if (ch == '\\') {
+                escape = true;
+                continue;
+            }
             if (ch == quote) {
                 quote = '\0';
             } else {
@@ -108,6 +122,10 @@ std::vector<std::string> tokenize(const std::string& line) {
             continue;
         }
         current.push_back(ch);
+    }
+
+    if (escape) {
+        current.push_back('\\');
     }
 
     if (!current.empty()) {
@@ -151,6 +169,7 @@ void print_prompt_help() {
         << "  show config                  Show current session configuration\n"
         << "  set target <path>            Set default target directory\n"
         << "  set destination <path>       Set log/report/baseline destination root\n"
+        << "                               (saved for future Sentinel-C runs)\n"
         << "  set interval <n>             Set default watch interval in seconds\n"
         << "  set cycles <n>               Set default watch cycles\n"
         << "  set reports <on|off>         Enable/disable report generation for verify/watch\n"
@@ -166,7 +185,8 @@ void print_prompt_help() {
         << "Direct command aliases:\n"
         << "  init | scan | update | status | verify | watch | doctor | guard\n"
         << "  list-baseline | show-baseline | export-baseline | import-baseline\n"
-        << "  purge-reports | tail-log | report-index | version | about | explain | help\n"
+        << "  purge-reports | tail-log | report-index | set-destination | show-destination\n"
+        << "  version | about | explain | help\n"
         << "\n"
         << "Prompt-only keywords:\n"
         << "  banner                       Clear screen and print the Sentinel-C banner\n"
@@ -206,6 +226,8 @@ std::unordered_map<std::string, std::string> alias_map() {
         {"purge-reports", "--purge-reports"},
         {"tail-log", "--tail-log"},
         {"report-index", "--report-index"},
+        {"set-destination", "--set-destination"},
+        {"show-destination", "--show-destination"},
         {"version", "--version"},
         {"about", "--about"},
         {"explain", "--explain"},
@@ -345,7 +367,7 @@ bool handle_set(PromptSession& session, const std::vector<std::string>& tokens) 
     }
 
     const std::string key = lower_copy(tokens[1]);
-    const std::string value = trim_copy(tokens[2]);
+    const std::string value = trim_copy(join_tail_tokens(tokens, 2));
 
     if (key == "target") {
         session.target = value;
@@ -360,7 +382,12 @@ bool handle_set(PromptSession& session, const std::vector<std::string>& tokens) 
         }
         fsutil::ensure_dirs();
         logger::reopen();
+        if (!core::save_output_root(config::output_root(), &error)) {
+            logger::error("Destination applied but not saved: " + error);
+            return true;
+        }
         logger::success("Output destination updated: " + config::output_root());
+        logger::info("Saved to: " + core::settings_file_path());
         return true;
     }
 
@@ -478,7 +505,7 @@ bool run_prompt_command(PromptSession& session, const std::vector<std::string>& 
             logger::error("Usage: use <path>");
             return true;
         }
-        session.target = tokens[1];
+        session.target = trim_copy(join_tail_tokens(tokens, 1));
         logger::success("Default target updated.");
         return true;
     }

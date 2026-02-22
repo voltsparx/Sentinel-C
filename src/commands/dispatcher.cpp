@@ -105,6 +105,20 @@ ExitCode dispatch(const ParsedArgs& parsed) {
         return handle_doctor(parsed);
     }
 
+    if (command == "--set-destination") {
+        if (!validate_known_options(parsed, {"json", "quiet"}, {})) {
+            return ExitCode::UsageError;
+        }
+        return handle_set_destination(parsed);
+    }
+
+    if (command == "--show-destination") {
+        if (!validate_known_options(parsed, {"json", "quiet"}, {"output-root"})) {
+            return ExitCode::UsageError;
+        }
+        return handle_show_destination(parsed);
+    }
+
     if (command == "--guard") {
         if (!validate_known_options(parsed, {"fix", "json", "quiet", "no-advice"}, {"output-root"})) {
             return ExitCode::UsageError;

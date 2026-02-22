@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(SentinelC VERSION 4.0 LANGUAGES CXX)
+project(SentinelC VERSION 4.5 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -21,6 +21,7 @@ set(SENTINEL_SOURCES
     src/banner.cpp
     src/core/fsutil.cpp
     src/core/logger.cpp
+    src/core/runtime_settings.cpp
     src/core/summary.cpp
     src/scanner/scanner.cpp
     src/scanner/baseline.cpp

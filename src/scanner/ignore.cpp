@@ -12,8 +12,10 @@ std::vector<std::string> rules;
 
 std::string normalize(std::string text) {
     std::replace(text.begin(), text.end(), '\\', '/');
+#ifdef _WIN32
     std::transform(text.begin(), text.end(), text.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+#endif
     return text;
 }
 
