@@ -163,7 +163,7 @@ if [[ -d "${PROJECT_ROOT}/docs" ]]; then
 fi
 
 cat > "${RELEASE_DIR}/README.md" <<'EOF'
-# Sentinel-C v4.0 (Linux x86_64)
+# Sentinel-C v4.5 (Linux x86_64)
 
 Author: voltsparx
 Contact: voltsparx@gmail.com
@@ -178,6 +178,7 @@ Contents:
 Quick Run:
 chmod +x bin/sentinel-c
 ./bin/sentinel-c --help
+./bin/sentinel-c --set-destination "$HOME/sentinel-c-data"
 ./bin/sentinel-c --prompt-mode
 EOF
 
